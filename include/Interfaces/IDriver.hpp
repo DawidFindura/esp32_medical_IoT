@@ -17,6 +17,11 @@ namespace Interface
         virtual execStatus init() = 0;
 
         /**
+         * @brief Deinitialize driver object
+         */
+        virtual execStatus deinit() = 0;
+
+        /**
          * @brief Start execution of driver object task
          */
         virtual execStatus start() = 0;

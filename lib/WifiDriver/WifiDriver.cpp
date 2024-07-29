@@ -18,6 +18,12 @@ execStatus WifiDriver::init()
     return eStatus;
 }
 
+execStatus WifiDriver::deinit()
+{
+    execStatus eStatus = execStatus::FAILURE;
+    return eStatus;
+}
+
 execStatus WifiDriver::start()
 {
     execStatus eStatus = execStatus::FAILURE;
