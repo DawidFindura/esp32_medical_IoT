@@ -2,7 +2,7 @@
 #define WIFI_DRIVER_HPP
 
 #include "Interfaces/IDriver.hpp"
-#include "Enums/execStatus.hpp"
+#include "Enums/eExecStatus.hpp"
 
 namespace Driver
 {
