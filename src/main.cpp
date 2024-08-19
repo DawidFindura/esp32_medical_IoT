@@ -7,7 +7,6 @@
 #include "WifiDriver.hpp"
 #include "ADC_driver.hpp"
 
-
 #define _VAL_TO_STRING( val )   #val
 #define VAL_TO_STRING( val )    _VAL_TO_STRING( val )
 
@@ -33,7 +32,7 @@ extern "C" void app_main()
 
     while( true )
     {
-        ESP_LOGI( TAG, "adc test" );
+        //ESP_LOGI( TAG, "adc test" );
         vTaskDelay( pdMS_TO_TICKS( ONE_SECOND_DELAY ) );
     }
 } 

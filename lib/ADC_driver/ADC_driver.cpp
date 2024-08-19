@@ -1,5 +1,6 @@
 #include <esp_log.h>
 #include <driver/gpio.h>
+#include <driver/uart.h>
 
 #include "ADC_driver.hpp"
 
@@ -8,10 +9,14 @@
 
 #define NUMBER_OF_ADC_CHANNELS  1
 #define ADC_GPIO_PIN            GPIO_NUM_34
-#define ADC_SAMPLE_FREQ_HZ      20000
+#define ADC_SAMPLE_FREQ_HZ      20000 // 20 kHz
 
 #define ADC_DATA_READER_TASK_STACK_SIZE     5000 // bytes
 #define ADC_DATA_READER_TASK_PRIORITY       5
+
+#define ADC_DATA_PROC_TASK_STACK_SIZE       10000 // bytes
+#define ADC_DATA_PROC_TASK_PRIORITY         ( ADC_DATA_READER_TASK_PRIORITY - 1 )
+#define ADC_DATA_PROC_BUFFER_SIZE           ()
 
 #define ADC_DATA_RING_BUFFER_ITEM_SIZE      sizeof(int)
 #define ADC_DATA_RING_BUFFER_MAX_ITEMS      3000
@@ -27,9 +32,12 @@ using namespace Driver;
 ADC_driver::ADC_driver() :   
     m_adc_device(),
     m_adc_driver_state( eDriverState::UNINITIALIZED ), 
-    m_adc_data_reader_task_handle( NULL ), 
+    m_adc_data_reader_task_handle( NULL ),
+    m_adc_data_proc_task_handle( NULL ), 
     m_adc_data_ring_buff_handle( NULL ),
-    m_adc_data_reader_semphr( NULL )
+    m_adc_data_reader_semphr( NULL ),
+    m_adc_data_proc_semphr( NULL ),
+    m_data_logger()
 {
 
 }
@@ -61,7 +69,15 @@ execStatus ADC_driver::init()
     m_adc_data_reader_semphr = xSemaphoreCreateBinary();
     if( NULL == m_adc_data_reader_semphr )
     {
-        ESP_LOGW( TAG, "Failed to create binary semaphore" );
+        ESP_LOGW( TAG, "Failed to create binary semaphore for data reader task" );
+        return eStatus = execStatus::FAILURE;   
+    }
+
+    /* Creation of task synchronizing semaphore */
+    m_adc_data_proc_semphr = xSemaphoreCreateBinary();
+    if( NULL == m_adc_data_proc_semphr )
+    {
+        ESP_LOGW( TAG, "Failed to create binary semaphore for data processor task" );
         return eStatus = execStatus::FAILURE;   
     }
 
@@ -83,6 +99,29 @@ execStatus ADC_driver::init()
         {
             vTaskDelete( m_adc_data_reader_task_handle );
             m_adc_data_reader_task_handle = NULL;   
+        }
+
+        return eStatus = execStatus::FAILURE;
+    }   
+
+    /* ADC data processor task creation*/
+    ret = xTaskCreate
+        (
+            adc_data_processor_task,
+            "ADC data processor task",
+            ADC_DATA_PROC_TASK_STACK_SIZE,
+            (void *)this,
+            ADC_DATA_PROC_TASK_PRIORITY,
+            &m_adc_data_proc_task_handle
+        );
+
+    if( pdTRUE != ret )
+    {
+        ESP_LOGI( TAG, "Error while creating ADC data processor task. Error num: %d", (int)ret );
+        if( NULL != m_adc_data_proc_task_handle )
+        {
+            vTaskDelete( m_adc_data_proc_task_handle );
+            m_adc_data_proc_task_handle = NULL;   
         }
 
         return eStatus = execStatus::FAILURE;
@@ -156,11 +195,21 @@ execStatus ADC_driver::start()
     if( ESP_OK == esp_err )
     {
         m_adc_driver_state = eDriverState::STARTED;
+
         if( NULL != m_adc_data_reader_semphr )
         {  
             if( pdTRUE != xSemaphoreGive( m_adc_data_reader_semphr ) )
             {
                 ESP_LOGW( TAG, "Failed to release semaphore and start the adc data reader task!!!" );
+                return eStatus = execStatus::FAILURE;
+            }
+        }
+
+        if( NULL != m_adc_data_proc_semphr )
+        {  
+            if( pdTRUE != xSemaphoreGive( m_adc_data_proc_semphr ) )
+            {
+                ESP_LOGW( TAG, "Failed to release semaphore and start the adc data processor task!!!" );
                 return eStatus = execStatus::FAILURE;
             }
         }
@@ -445,8 +494,12 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
                         esp_err = adc_cali_raw_to_voltage( adc_driver->m_adc_device.adc_cali_scheme_handle, adc_raw_data, &voltage );
                         if( ESP_OK == esp_err )
                         {
-                            ESP_LOGI(TAG, "Channel: %d, Raw Value: %d Voltage: %d", (int)adc_chan_num, (int)adc_raw_data, (int)voltage );
+                            //ESP_LOGI(TAG, "Channel: %d, Raw Value: %d Voltage: %d", (int)adc_chan_num, (int)adc_raw_data, (int)voltage );
                             UBaseType_t ret = xRingbufferSend( ring_buff_handle, &voltage, sizeof( voltage ), ticks_to_wait_for_room );
+                            if( ret != pdTRUE )
+                            {
+                                //ESP_LOGE( TAG, " Failed to send data to ring buffer" );
+                            }
                         }
                     } 
                     else 
@@ -455,7 +508,7 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
                     }
                 }
             }
-            /* minimum delay for Idle Task to clean and reset watchdog timer */
+            /* minimum delay for Idle Task to do clean job and reset watchdog timer */
             vTaskDelay(1);
         }
 
@@ -463,7 +516,43 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
         goto task_beginning;
 }
 
-void adc_data_processor_task( void * pvUserData )
+void ADC_driver::adc_data_processor_task( void * pvUserData )
 {
+    RingbufHandle_t ring_buff_handle = NULL;
+    size_t item_size = 0;
+    int * received_item_ptr = 0;
+    int data_to_process[ 2000 ] = {0};
 
+    ADC_driver * adc_driver = static_cast<ADC_driver *>( pvUserData );
+    
+     /* label for goto statement */
+    task_beginning:
+
+        /* Wait in blocked state until the task is explicitly started */
+        while( eDriverState::STARTED != adc_driver->m_adc_driver_state )
+        {
+            ESP_LOGI( TAG, "Waiting in blocked state until samphore is given" );
+            (void)xSemaphoreTake( adc_driver->m_adc_data_proc_semphr, portMAX_DELAY );
+            ESP_LOGI( TAG, "Task is explicitly started" );
+        }
+    
+        ring_buff_handle = adc_driver->m_adc_data_ring_buff_handle;
+
+        while( eDriverState::STARTED == adc_driver->m_adc_driver_state )
+        {  
+            for( int i = 0; i < 2000; i++ )
+            {
+                /* wait infinitely long time for item to be available in the ring buffer */
+                received_item_ptr = (int * )xRingbufferReceive( ring_buff_handle, &item_size, portMAX_DELAY );
+                data_to_process[ i ] = *received_item_ptr;
+                vRingbufferReturnItem( ring_buff_handle, (void *)received_item_ptr );
+            }
+            int a = '2'; 
+            adc_driver->m_data_logger.write_out( a );
+            /* minimum delay for Idle Task to do clean job and reset watchdog timer */
+            vTaskDelay(1);
+        }
+
+        /* if task is stopped and go out of the while loop the control goes to the beginning of the task code */
+        goto task_beginning;
 }

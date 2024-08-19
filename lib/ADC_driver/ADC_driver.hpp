@@ -11,8 +11,9 @@
 #include "Interfaces/IDriver.hpp"
 #include "Enums/eExecStatus.hpp"
 #include "Enums/eDriverState.hpp"
+#include "DataLogger.hpp"
 
-#define ADC_ATTEN_DEFAULT       ADC_ATTEN_DB_0
+#define ADC_ATTEN_DEFAULT       ADC_ATTEN_DB_11 // for input signal range 150 mV - 2450 mV
 #define ADC_BITWIDTH_DEFAULT    ADC_BITWIDTH_12
 
 
@@ -72,6 +73,10 @@ namespace Driver
         TaskHandle_t m_adc_data_reader_task_handle;
 
         /**
+         * @brief ADC data processor task handle
+         */
+        TaskHandle_t m_adc_data_proc_task_handle;
+        /**
          * @brief handle to ring buffer for storing ADC result data shared beetween reader and processor tasks
          */
         RingbufHandle_t m_adc_data_ring_buff_handle;
@@ -80,6 +85,17 @@ namespace Driver
          * semaphore used to synchronize adc data reader task
          */
         SemaphoreHandle_t m_adc_data_reader_semphr;
+        
+        /**
+         * @brief semaphore used to synchronize adc data processor task
+         */
+        SemaphoreHandle_t m_adc_data_proc_semphr;
+
+        /**
+         * @brief data logger for writing out adc conversion result via uart/usb bridge 
+         */
+        Logger::DataLogger m_data_logger;
+
         /**
          * @brief Create supported calibration scheme for ADC unit
          * 
@@ -106,6 +122,11 @@ namespace Driver
          * @brief function executed as FreeRTOS task
          */
         static void adc_data_reader_task( void * pvUserData );
+
+        /**
+         * @brief function executed as FreeRTOS task
+         */
+        static void adc_data_processor_task( void * pvUserData );
 
     };
 
