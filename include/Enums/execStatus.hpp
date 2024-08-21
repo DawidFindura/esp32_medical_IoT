@@ -8,7 +8,8 @@
 enum class execStatus
 {
     FAILURE,
-    SUCCESS
+    SUCCESS,
+    NULL_POINTER
 };
 
 #endif // ENUM_EXEC_STATUS
