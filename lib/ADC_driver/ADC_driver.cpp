@@ -4,22 +4,22 @@
 
 #include "ADC_driver.hpp"
 
-#define CONVERSION_FRAME_SIZE   256 // bytes
-#define MAX_STORE_BUF_SIZE      1024 // bytes
+#define CONVERSION_FRAME_SIZE               256 // bytes
+#define MAX_STORE_BUF_SIZE                  1024 // bytes
 
-#define NUMBER_OF_ADC_CHANNELS  1
-#define ADC_GPIO_PIN            GPIO_NUM_34
-#define ADC_SAMPLE_FREQ_HZ      20000 // 20 kHz
+#define NUMBER_OF_ADC_CHANNELS              1
+#define ADC_GPIO_PIN                        GPIO_NUM_34
+#define ADC_SAMPLE_FREQ_HZ                  20000 // 20 kHz
 
 #define ADC_DATA_READER_TASK_STACK_SIZE     5000 // bytes
 #define ADC_DATA_READER_TASK_PRIORITY       5
 
 #define ADC_DATA_PROC_TASK_STACK_SIZE       10000 // bytes
-#define ADC_DATA_PROC_TASK_PRIORITY         ( ADC_DATA_READER_TASK_PRIORITY - 1 )
+#define ADC_DATA_PROC_TASK_PRIORITY         ADC_DATA_READER_TASK_PRIORITY
 #define ADC_DATA_PROC_BUFFER_SIZE           ()
 
 #define ADC_DATA_RING_BUFFER_ITEM_SIZE      sizeof(int)
-#define ADC_DATA_RING_BUFFER_MAX_ITEMS      3000
+#define ADC_DATA_RING_BUFFER_MAX_ITEMS      3200
 
 
 static const char * TAG = " ADC_driver";
@@ -265,12 +265,26 @@ execStatus ADC_driver::setAttenuation( adc_atten_t a_adc_atten )
     }
 
     return eStatus;
+}
+
+execStatus ADC_driver::setMultisamplingMode( multisampling_mode_t in_multisampling_mode )
+{
+    execStatus eStatus = execStatus::FAILURE;
+
+    m_adc_device.multisampling_mode = in_multisampling_mode;
+    if( m_adc_device.multisampling_mode == in_multisampling_mode )
+    {
+        eStatus = execStatus::SUCCESS;
     }
+
+    return eStatus;   
+}
 
 execStatus ADC_driver::getBitwidth( adc_bitwidth_t & a_adc_bitwidth )
 {
     execStatus eStatus = execStatus::SUCCESS;
     a_adc_bitwidth = m_adc_device.adc_bitwidth;
+    
     return eStatus;
 }
 
@@ -278,6 +292,7 @@ execStatus ADC_driver::getAttenuation( adc_atten_t & a_adc_atten )
 {
     execStatus eStatus = execStatus::SUCCESS;
     a_adc_atten = m_adc_device.adc_atten;
+    
     return eStatus;
 }
 
@@ -285,6 +300,7 @@ execStatus ADC_driver::getCaliSchemeHandle( adc_cali_handle_t & a_adc_cali_schem
 {
     execStatus eStatus = execStatus::SUCCESS;
     a_adc_cali_scheme_handle = m_adc_device.adc_cali_scheme_handle;
+    
     return eStatus;
 }
 
@@ -520,7 +536,7 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
 {
     RingbufHandle_t ring_buff_handle = NULL;
     size_t item_size = 0;
-    int * received_item_ptr = 0;
+    int * received_item_ptr = NULL;
     int data_to_process[ 2000 ] = {0};
 
     ADC_driver * adc_driver = static_cast<ADC_driver *>( pvUserData );
@@ -540,13 +556,11 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
 
         while( eDriverState::STARTED == adc_driver->m_adc_driver_state )
         {  
-            for( int i = 0; i < 2000; i++ )
-            {
-                /* wait infinitely long time for item to be available in the ring buffer */
-                received_item_ptr = (int * )xRingbufferReceive( ring_buff_handle, &item_size, portMAX_DELAY );
-                data_to_process[ i ] = *received_item_ptr;
-                vRingbufferReturnItem( ring_buff_handle, (void *)received_item_ptr );
-            }
+            /* wait infinitely long time for item to be available in the ring buffer */
+            received_item_ptr = (int * )xRingbufferReceive( ring_buff_handle, &item_size, portMAX_DELAY );
+            
+            vRingbufferReturnItem( ring_buff_handle, (void *)received_item_ptr );
+            
             int a = '2'; 
             adc_driver->m_data_logger.write_out( a );
             /* minimum delay for Idle Task to do clean job and reset watchdog timer */

@@ -16,13 +16,22 @@
 #define ADC_ATTEN_DEFAULT       ADC_ATTEN_DB_11 // for input signal range 150 mV - 2450 mV
 #define ADC_BITWIDTH_DEFAULT    ADC_BITWIDTH_12
 
-
 namespace Driver
 {
 
     class ADC_driver : public Interface::IDriver
     {
     public:
+
+        typedef enum multisampling_mode
+        {
+            MULTISAMPLING_MODE_NONE = 0,
+            MULTISAMPLING_MODE_8    = 8,
+            MULTISAMPLING_MODE_16   = 16,
+            MULTISAMPLING_MODE_32   = 32,
+            MULTISAMPLING_MODE_64   = 64
+
+        } multisampling_mode_t;
 
         ADC_driver();
         ~ADC_driver();
@@ -34,19 +43,27 @@ namespace Driver
 
         execStatus setBitwidth( adc_bitwidth_t adc_bitwidth );
         execStatus setAttenuation( adc_atten_t adc_atten );
+        execStatus setMultisamplingMode( multisampling_mode_t in_multisampling_mode );
 
         execStatus getBitwidth( adc_bitwidth_t & adc_bitwidth );
         execStatus getAttenuation( adc_atten_t & adc_atten );
         execStatus getCaliSchemeHandle( adc_cali_handle_t & a_adc_cali_scheme_handle );
 
-
-
-    
     private:
 
         typedef struct adc_dev
         {
-            adc_dev() : adc_unit( ADC_UNIT_1 ), adc_atten( ADC_ATTEN_DEFAULT ), adc_bitwidth( ADC_BITWIDTH_DEFAULT ), adc_cali_scheme_handle( NULL ), adc_continuous_mode_drv_handle( NULL ) {}
+            /* default configuration of ADC driver */
+            adc_dev() : 
+                adc_unit( ADC_UNIT_1 ), 
+                adc_atten( ADC_ATTEN_DEFAULT ), 
+                adc_bitwidth( ADC_BITWIDTH_DEFAULT ), 
+                adc_cali_scheme_handle( NULL ), 
+                adc_continuous_mode_drv_handle( NULL ),
+                multisampling_mode( MULTISAMPLING_MODE_64 )
+            {
+
+            }
 
             adc_unit_t adc_unit;
             adc_atten_t adc_atten;
@@ -54,6 +71,7 @@ namespace Driver
             adc_channel_t adc_channel;
             adc_cali_handle_t adc_cali_scheme_handle;
             adc_continuous_handle_t adc_continuous_mode_drv_handle;
+            multisampling_mode_t multisampling_mode;
 
         } adc_dev_t;
 

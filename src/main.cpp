@@ -17,7 +17,6 @@ static const char * TAG = "ADC_test";
 extern "C" void app_main() 
 {
     Driver::ADC_driver adc_device;
-    
     execStatus eStatus = adc_device.init();
     vTaskDelay( pdMS_TO_TICKS(2000) );
     if(eStatus == execStatus::SUCCESS) ESP_LOGI( TAG, "Init finished ok" );
