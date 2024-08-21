@@ -537,7 +537,6 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
     RingbufHandle_t ring_buff_handle = NULL;
     size_t item_size = 0;
     int * received_item_ptr = NULL;
-    int data_to_process[ 2000 ] = {0};
 
     ADC_driver * adc_driver = static_cast<ADC_driver *>( pvUserData );
     
@@ -553,16 +552,28 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
         }
     
         ring_buff_handle = adc_driver->m_adc_data_ring_buff_handle;
+        int multisampling_window_size = static_cast<int>( adc_driver->m_adc_device.multisampling_mode );
 
         while( eDriverState::STARTED == adc_driver->m_adc_driver_state )
         {  
-            /* wait infinitely long time for item to be available in the ring buffer */
-            received_item_ptr = (int * )xRingbufferReceive( ring_buff_handle, &item_size, portMAX_DELAY );
+            int result = 0;
+            int multisampling_index = 0;
+
+            do
+            {
+                /* wait infinitely long time for item to be available in the ring buffer */
+                received_item_ptr = (int * )xRingbufferReceive( ring_buff_handle, &item_size, portMAX_DELAY );
+                result += *received_item_ptr;
+                vRingbufferReturnItem( ring_buff_handle, (void *)received_item_ptr );
+                multisampling_index++;
+
+            } while ( multisampling_index < multisampling_window_size );
             
-            vRingbufferReturnItem( ring_buff_handle, (void *)received_item_ptr );
+            result /= multisampling_index;
             
-            int a = '2'; 
-            adc_driver->m_data_logger.write_out( a );
+            printf( "%d", result );
+            //adc_driver->m_data_logger.write_out( a );
+            
             /* minimum delay for Idle Task to do clean job and reset watchdog timer */
             vTaskDelay(1);
         }
