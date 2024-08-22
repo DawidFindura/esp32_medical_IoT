@@ -33,14 +33,22 @@ namespace Driver
         execStatus getAttenuation( adc_atten_t & adc_atten );
         execStatus getCaliSchemeHandle( adc_cali_handle_t & a_adc_cali_scheme_handle );
 
+        typedef enum multisampling_mode
+        {
+            MULTISAMPLING_MODE_NONE,
+            MULTISAMPLING_MODE_8,
+            MULTISAMPLING_MODE_16,
+            MULTISAMPLING_MODE_32,
+            MULTISAMPLING_MODE_64
 
+        } multisampling_mode_t;
 
     
     private:
 
         typedef struct adc_dev
         {
-            adc_dev() : adc_unit( ADC_UNIT_1 ), adc_atten( ADC_ATTEN_DEFAULT ), adc_bitwidth( ADC_BITWIDTH_DEFAULT ), adc_cali_scheme_handle( NULL ), adc_continuous_mode_drv_handle( NULL ) {}
+            adc_dev() : adc_unit( ADC_UNIT_1 ), adc_atten( ADC_ATTEN_DEFAULT ), adc_bitwidth( ADC_BITWIDTH_DEFAULT ), adc_cali_scheme_handle( NULL ), adc_continuous_mode_drv_handle( NULL ), multisampling_mode( MULTISAMPLING_MODE_NONE ) {}
 
             adc_unit_t adc_unit;
             adc_atten_t adc_atten;
@@ -48,6 +56,7 @@ namespace Driver
             adc_channel_t adc_channel;
             adc_cali_handle_t adc_cali_scheme_handle;
             adc_continuous_handle_t adc_continuous_mode_drv_handle;
+            multisampling_mode_t multisampling_mode;
 
         } adc_dev_t;
 
