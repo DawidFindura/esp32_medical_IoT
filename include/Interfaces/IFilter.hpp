@@ -11,16 +11,7 @@ namespace Interface
 
         virtual ~IFilter() = default;
 
-        typedef struct filter_input
-        {
-            filter_input( float in_x_sample, float in_y_sample = 0.0f ) : x_sample( in_x_sample ) {}
-
-            float x_sample;
-            float y_sample;
-
-        } filter_input_t;
-
-        virtual execStatus calculate_output( const filter_input_t & filter_input, float & filter_output ) = 0;
+        virtual execStatus calculate_output( const float filter_input, float & filter_output ) = 0;
 
     };
 }

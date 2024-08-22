@@ -31,7 +31,7 @@ FIR_filter::~FIR_filter()
     }
 }
 
-execStatus FIR_filter::calculate_output( const filter_input_t & filter_input, float & filter_output )
+execStatus FIR_filter::calculate_output( const float filter_input, float & filter_output )
 {
     execStatus eStatus = execStatus::FAILURE;
     float temp_output = 0.0f;
@@ -41,7 +41,7 @@ execStatus FIR_filter::calculate_output( const filter_input_t & filter_input, fl
         return eStatus = execStatus::NULL_POINTER;
     }
 
-    m_circular_buffer[ m_buffer_index ] = filter_input.x_sample; 
+    m_circular_buffer[ m_buffer_index ] = filter_input; 
     
     m_buffer_index++;
     if( m_buffer_index == m_filter_length )
