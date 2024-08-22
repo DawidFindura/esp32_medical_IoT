@@ -26,7 +26,8 @@ extern "C" void app_main()
     int i = 0;
     while( true )
     {
-        fir_filter.calculate_output( input_signal[i], out );
+        Interface::IFilter::filter_input_t signal( input_signal[i] );
+        fir_filter.calculate_output( signal, out );
         //printf("Filter output[%d]: %f \n",i, out );
         printf("input");
         printf("%f", input_signal[i]);
