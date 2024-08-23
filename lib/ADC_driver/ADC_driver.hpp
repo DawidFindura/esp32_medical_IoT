@@ -48,17 +48,6 @@ namespace Driver
         execStatus getBitwidth( adc_bitwidth_t & adc_bitwidth );
         execStatus getAttenuation( adc_atten_t & adc_atten );
         execStatus getCaliSchemeHandle( adc_cali_handle_t & a_adc_cali_scheme_handle );
-
-        typedef enum multisampling_mode
-        {
-            MULTISAMPLING_MODE_NONE,
-            MULTISAMPLING_MODE_8,
-            MULTISAMPLING_MODE_16,
-            MULTISAMPLING_MODE_32,
-            MULTISAMPLING_MODE_64
-
-        } multisampling_mode_t;
-
     
     private:
 
