@@ -2,8 +2,10 @@
 #include "IIR_filer.hpp"
 
 /* highpass filter coefficients for fc = 0.5 Hz*/
-const float iir_filter_a_coeff_high[5]={1.000000,-3.971566,5.915101,-3.915501,0.971966};
-const float iir_filter_b_coeff_high[5]={0.985883,-3.943533,5.915300,-3.943533,0.985883};
+//const float iir_filter_a_coeff_high[5]={1.000000,-3.971566,5.915101,-3.915501,0.971966};
+//const float iir_filter_b_coeff_high[5]={0.985883,-3.943533,5.915300,-3.943533,0.985883};
+const float iir_filter_a_coeff_high[3]={1.000000,-1.971567,0.971966};
+const float iir_filter_b_coeff_high[3]={0.985883,-1.971767,0.985883};
 
 /* stopband filter coefficients for power line noise; fc1 = 49 Hz fc2 = 51 Hz */
 const float iir_filter_a_coeff_stop[5]={1.000000,-2.113270,3.059843,-2.054015,0.944718};

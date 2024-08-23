@@ -12,7 +12,7 @@ namespace Interface
         virtual ~IFilter() = default;
 
         virtual execStatus calculate_output( const float filter_input, float & filter_output ) = 0;
-
+        
     };
 }
 

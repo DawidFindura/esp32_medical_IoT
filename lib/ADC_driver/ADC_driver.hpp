@@ -12,6 +12,7 @@
 #include "Enums/eExecStatus.hpp"
 #include "Enums/eDriverState.hpp"
 #include "DataLogger.hpp"
+#include "Cascade_filter.hpp"
 
 #define ADC_ATTEN_DEFAULT       ADC_ATTEN_DB_11 // for input signal range 150 mV - 2450 mV
 #define ADC_BITWIDTH_DEFAULT    ADC_BITWIDTH_12
@@ -33,7 +34,7 @@ namespace Driver
 
         } multisampling_mode_t;
 
-        ADC_driver();
+        ADC_driver( Filter::Cascade_filter & in_cascade_filter );
         ~ADC_driver();
 
         execStatus init();
@@ -74,6 +75,11 @@ namespace Driver
             multisampling_mode_t multisampling_mode;
 
         } adc_dev_t;
+
+          /**
+         * @brief structure containg array of signal filters 
+         */
+        Filter::Cascade_filter & m_cascade_filter;
 
         /**
          * @brief structure representing ADC device
@@ -127,7 +133,6 @@ namespace Driver
          * @returns enum code execStatus: SUCCESS or FAILURE 
          */
         execStatus adc_continuous_mode_drv_init();
-
 
         /* Static functions declarations */
 

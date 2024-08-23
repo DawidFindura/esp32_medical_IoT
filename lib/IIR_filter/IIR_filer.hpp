@@ -7,8 +7,8 @@
 
 /* declarations of iir filter coefficients defined in IIR_filter.cpp file */
 
-extern const float iir_filter_a_coeff_high[ 5 ];
-extern const float iir_filter_b_coeff_high[ 5 ];
+extern const float iir_filter_a_coeff_high[ 3 ];
+extern const float iir_filter_b_coeff_high[ 3 ];
 
 extern const float iir_filter_a_coeff_low[ 5 ];
 extern const float iir_filter_b_coeff_low[ 5 ];

@@ -29,7 +29,9 @@ using namespace Driver;
 
 // public function definitions
 
-ADC_driver::ADC_driver() :   
+ADC_driver::ADC_driver( Filter::Cascade_filter & in_cascade_filter ) :   
+    
+    m_cascade_filter( in_cascade_filter ),
     m_adc_device(),
     m_adc_driver_state( eDriverState::UNINITIALIZED ), 
     m_adc_data_reader_task_handle( NULL ),
@@ -38,6 +40,7 @@ ADC_driver::ADC_driver() :
     m_adc_data_reader_semphr( NULL ),
     m_adc_data_proc_semphr( NULL ),
     m_data_logger()
+    
 {
 
 }
