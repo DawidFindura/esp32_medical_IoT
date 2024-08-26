@@ -22,12 +22,13 @@ static const char * TAG = "WIFI TEST";
 
 using namespace Driver;
 
-//static member initialization
-EventGroupHandle_t WifiDriver::m_psWifiEventGroup = NULL;
-eDriverState WifiDriver::m_eState = eDriverState::UNINITIALIZED;
-uint8_t WifiDriver::u8RetryNum = 0;
-
-WifiDriver::WifiDriver() : m_sWifiInitConfig(), m_uWifiConfig(), m_psWifiNetif( NULL )
+WifiDriver::WifiDriver() : 
+        m_u8RetryNum( 0 ),
+        m_eState( eDriverState::UNINITIALIZED ),
+        m_psWifiEventGroup( NULL ), 
+        m_sWifiInitConfig(), 
+        m_uWifiConfig(), 
+        m_psWifiNetif( NULL )
 {
     m_pcWifiPassword = defaultWifiPassword;
     m_pcWifiSSID = defaultWifiSSID;
@@ -107,12 +108,14 @@ execStatus WifiDriver::init()
 
     if( ESP_OK == esp_err )
     {
-        esp_err = esp_event_handler_register( WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler, NULL );
+        /* as last argument passing pointer to this wifi driver object instance */
+        esp_err = esp_event_handler_register( WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler, (void *)this );
     }
 
     if( ESP_OK == esp_err )
     {
-        esp_err = esp_event_handler_register( IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler, NULL );
+        /* as last argument passing pointer to this wifi driver object instance */
+        esp_err = esp_event_handler_register( IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler, (void *)this );
     }
     
     if( ESP_OK == esp_err )
@@ -186,7 +189,7 @@ execStatus WifiDriver::deinit()
         memset( &m_uWifiConfig, 0, sizeof( m_uWifiConfig ) );
         memset( &m_sWifiInitConfig, 0, sizeof( m_sWifiInitConfig ) );
         vEventGroupDelete( m_psWifiEventGroup );
-        WifiDriver::m_psWifiEventGroup = NULL;
+        m_psWifiEventGroup = NULL;
         
         ESP_LOGI("WIFI_TEST","WIFI DEINIT SUCCESSFUL");
         m_eState = eDriverState::DEINITIALIZED;
@@ -217,11 +220,11 @@ execStatus WifiDriver::start()
     /* waits for specific bits to be set in event handler and returns the bits before the call returned */
     EventBits_t bits = xEventGroupWaitBits
                         (
-                        m_psWifiEventGroup, 
-                        WifiConnectedBit | WifiFailBit,
-                        pdTRUE,
-                        pdFALSE,
-                        portMAX_DELAY
+                            m_psWifiEventGroup, 
+                            WifiConnectedBit | WifiFailBit,
+                            pdTRUE,
+                            pdFALSE,
+                            portMAX_DELAY
                         );
 
     /* test which event actually happened. */
@@ -280,6 +283,8 @@ execStatus WifiDriver::setWifiCredentials( const char * a_pcWifiPassword, const 
 
 void WifiDriver::wifiEventHandler( void * a_pvArgs, esp_event_base_t a_pcEventBase, int32_t a_i32EventID, void * a_pvEventData )
 {
+    WifiDriver * wifi_driver = static_cast<WifiDriver *>(a_pvArgs);
+
     if(  WIFI_EVENT == a_pcEventBase )
     {
         wifi_event_t eWifiEvent = static_cast<wifi_event_t>(a_i32EventID);
@@ -296,15 +301,15 @@ void WifiDriver::wifiEventHandler( void * a_pvArgs, esp_event_base_t a_pcEventBa
 
             case WIFI_EVENT_STA_DISCONNECTED:
             {
-                if( ( u8RetryNum < MAX_RETRY_NUM ) && ( eDriverState::STARTED == m_eState ) )
+                if( ( wifi_driver->m_u8RetryNum < MAX_RETRY_NUM ) && ( eDriverState::STARTED == wifi_driver->m_eState ) )
                 {
                     ESP_ERROR_CHECK(esp_wifi_connect());
-                    ESP_LOGI(TAG, "trying to connect:%d", u8RetryNum);
-                    u8RetryNum++;
+                    ESP_LOGI(TAG, "trying to connect:%d", wifi_driver->m_u8RetryNum);
+                    wifi_driver->m_u8RetryNum++;
                 }
                 else
                 {
-                    xEventGroupSetBits( m_psWifiEventGroup, WifiFailBit );
+                    xEventGroupSetBits( wifi_driver->m_psWifiEventGroup, WifiFailBit );
                 }
 
                 break;
@@ -313,9 +318,9 @@ void WifiDriver::wifiEventHandler( void * a_pvArgs, esp_event_base_t a_pcEventBa
             case WIFI_EVENT_STA_STOP:
             {
                 ESP_LOGI( TAG, "STA STOP EVENT" );
-                if ( m_psWifiEventGroup != NULL )
+                if ( NULL != wifi_driver->m_psWifiEventGroup )
                 {
-                    xEventGroupClearBits( m_psWifiEventGroup, WifiConnectedBit | WifiFailBit );
+                    xEventGroupClearBits( wifi_driver->m_psWifiEventGroup, WifiConnectedBit | WifiFailBit );
                 }
 
                 break;
@@ -337,9 +342,10 @@ void WifiDriver::wifiEventHandler( void * a_pvArgs, esp_event_base_t a_pcEventBa
             case IP_EVENT_STA_GOT_IP:
             {
                 ip_event_got_ip_t * psGotIpEventData = static_cast<ip_event_got_ip_t *>(a_pvEventData);
-                ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&psGotIpEventData->ip_info.ip));
-                u8RetryNum = 0;
-                xEventGroupSetBits( m_psWifiEventGroup, WifiConnectedBit );
+
+                ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR( &psGotIpEventData->ip_info.ip ) );
+                xEventGroupSetBits( wifi_driver->m_psWifiEventGroup, WifiConnectedBit );
+                wifi_driver->m_u8RetryNum = 0;
                 break;
             }
 

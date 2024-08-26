@@ -43,11 +43,22 @@ namespace Driver
         const char * m_pcWifiSSID;
 
         /**
-         * @brief static variable used to count retrying connection to Wifi network 
+         * @brief variable used to count retrying connection to Wifi network 
          * 
-         * @var static uint8_t u8RetryNum
          */
-        static uint8_t u8RetryNum;
+        uint8_t m_u8RetryNum;
+
+        /**
+         * @brief private member of class WifiDriver. Contains current state of Wifi driver.
+         * 
+         */
+        eDriverState m_eState;
+
+        /**
+         * @brief private member of class WifiDriver. It is a pointer to structure returned by xEventGroupCreate() function call.
+         * 
+         */
+        EventGroupHandle_t m_psWifiEventGroup;
       
         /**
          * @brief Private member of WifiDriver class. WiFi stack configuration parameters passed to esp_wifi_init call.
@@ -85,18 +96,6 @@ namespace Driver
             WifiFailBit = (1 << 1)
         };
 
-        /**
-         * @brief static and private member of class WifiDriver. Contains current state of Wifi driver.
-         * 
-         */
-        static eDriverState m_eState;
-
-        /**
-         * @brief static and private member of class WifiDriver. It is a pointer to structure returned by xEventGroupCreate() function call.
-         * 
-         * @var static EventGroupHandle_t m_psWifiEventGroup
-         */
-        static EventGroupHandle_t m_psWifiEventGroup;
 
         /**
          * @brief static and private method of class WifiDriver. It is a function which will be called after 
@@ -116,9 +115,6 @@ namespace Driver
         /**
          * @brief Construct a new Wifi Driver object
          * 
-         * @fn  WifiDriver( IDriverManager & a_roIDriverManager, eDriverID a_eDriverID )
-         * @param a_roIDriverManager [IN] reference to Driver Manager object
-         * @param a_eDriverID [IN] enum describing specific driver 
          */
         WifiDriver();
 
@@ -132,9 +128,7 @@ namespace Driver
         /**
          * @brief Initializes WifiDriver object. Sets up all neccessary structures and default initializers 
          * for Wifi driver to be ready for start.
-         * 
-         * @fn  eStatus init()
-         * @return eStatus enum decribing result of function execution: SUCCESS or FAILURE
+         *
          */
 
         execStatus init();
