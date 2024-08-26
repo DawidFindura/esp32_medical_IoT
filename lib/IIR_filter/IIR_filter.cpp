@@ -4,16 +4,27 @@
 /* highpass filter coefficients for fc = 0.5 Hz*/
 //const float iir_filter_a_coeff_high[5]={1.000000,-3.971566,5.915101,-3.915501,0.971966};
 //const float iir_filter_b_coeff_high[5]={0.985883,-3.943533,5.915300,-3.943533,0.985883};
-const float iir_filter_a_coeff_high[3]={1.000000,-1.971567,0.971966};
-const float iir_filter_b_coeff_high[3]={0.985883,-1.971767,0.985883};
+/* second order butterworth iir filter coefficients*/
+const float iir_filter_a_coeff_high[ 3 ] = {1.0000000, -1.9857830, 0.9858834};
+const float iir_filter_b_coeff_high[ 3 ] = {0.9929166, -1.9858332, 0.9929166};
+
+/* highpass filter coefficients for fc = 1 Hz*/
+const float iir_filter_a_coeff_high_1[3]={1.000000,-1.971567,0.971966};
+const float iir_filter_b_coeff_high_1[3]={0.985883,-1.971767,0.985883};
 
 /* stopband filter coefficients for power line noise; fc1 = 49 Hz fc2 = 51 Hz */
 const float iir_filter_a_coeff_stop[5]={1.0000000,  -2.1132703,   3.0598431,  -2.0540152,   0.9447179};
 const float iir_filter_b_coeff_stop[5]={0.9719659,  -2.0836427,   3.0606291,  -2.0836427,   0.9719659};
 
 /* lowpass filter coefficients for fc = 150 Hz */
-const float iir_filter_a_coeff_low[5]={1.000000,3.671729,5.067998,3.115967,0.719910};
-const float iir_filter_b_coeff_low[5]={0.848475,3.393901,5.090852,3.393901,0.848475};
+const float iir_filter_a_coeff_low[ 5 ]={ 1.0000000, 3.6717291, 5.0679984, 3.1159670, 0.7199103 };
+const float iir_filter_b_coeff_low[ 5 ]={ 0.8484753, 3.3939011, 5.0908518, 3.3939011, 0.8484753 };
+
+
+
+/* lowpass filter coefficients for fc = 40 Hz */
+const float iir_filter_a_coeff_low_40[ 5 ] = { 1.0000000, -1.9205066, 1.6745709, -0.6914244, 0.1140516 };
+const float iir_filter_b_coeff_low_40[ 5 ] = { 0.0110432,  0.0441729, 0.0662593, 0.0441729, 0.0110432 };
 
 /* cascade of lowpass, stopband and high pass filters coefficients */
 const float iir_filter_a_coeff_cascade[13]={1.000000,-2.413107,0.094064,5.426292,-6.207457,-1.564225,8.490730,-4.920080,-2.883555,4.694780,-1.139442,-1.239047,0.661046};
