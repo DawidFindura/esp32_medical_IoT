@@ -9,7 +9,7 @@
 #include "FIR_filter.hpp"
 #include "IIR_filer.hpp"
 #include "Cascade_filter.hpp"
-#include "input_signals.hpp"
+//#include "input_signals.hpp"
 
 static Filter::IIR_filter iir_filter_h1( iir_filter_a_coeff_high, iir_filter_b_coeff_high, 3 );
 static Filter::IIR_filter iir_filter_h2( iir_filter_a_coeff_high, iir_filter_b_coeff_high, 3 );
@@ -37,24 +37,30 @@ extern "C" void app_main()
     Driver::ADC_driver adc_device( cascade_filter, false );
     adc_device.init();
     adc_device.start();
+    adc_device.stop();
+
+    Driver::WifiDriver wifi_driver;
+    wifi_driver.init();
+    wifi_driver.start();
+
     float iir_out = 0.0f;
     int i = 0;
 
     while( true )
     {
-        cascade_filter.calculate_output( ecg_noisy[i], iir_out );
+        // cascade_filter.calculate_output( ecg_noisy[i], iir_out );
     
-        printf("input");
-        printf("%f", ecg_noisy[i]);
-        printf("cascadeFiltered");
-        printf("%f",(float)iir_out);
-        printf("\r\n");
+        // printf("input");
+        // printf("%f", ecg_noisy[i]);
+        // printf("cascadeFiltered");
+        // printf("%f",(float)iir_out);
+        // printf("\r\n");
 
-        i++;
-        if(i>=(sizeof(ecg_noisy) / sizeof(ecg_noisy[0])))
-        {
-            i= 0;
-        }
+        // i++;
+        // if(i>=(sizeof(ecg_noisy) / sizeof(ecg_noisy[0])))
+        // {
+        //     i= 0;
+        // }
 
         vTaskDelay( pdMS_TO_TICKS( 200 ) );
     }
