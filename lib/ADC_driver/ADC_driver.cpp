@@ -29,9 +29,10 @@ using namespace Driver;
 
 // public function definitions
 
-ADC_driver::ADC_driver( Filter::Cascade_filter & in_cascade_filter ) :   
+ADC_driver::ADC_driver( Filter::Cascade_filter & in_cascade_filter, bool enableFiltering ) :   
     
     m_cascade_filter( in_cascade_filter ),
+    m_isFilteringEnable( enableFiltering ),
     m_adc_device(),
     m_adc_driver_state( eDriverState::UNINITIALIZED ), 
     m_adc_data_reader_task_handle( NULL ),
@@ -517,7 +518,7 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
                             UBaseType_t ret = xRingbufferSend( ring_buff_handle, &voltage, sizeof( voltage ), ticks_to_wait_for_room );
                             if( ret != pdTRUE )
                             {
-                                //ESP_LOGE( TAG, " Failed to send data to ring buffer" );
+                                ESP_LOGE( TAG, " Failed to send data to ring buffer" );
                             }
                         }
                     } 
@@ -537,6 +538,8 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
 
 void ADC_driver::adc_data_processor_task( void * pvUserData )
 {
+    execStatus eStatus = execStatus::FAILURE;
+
     RingbufHandle_t ring_buff_handle = NULL;
     size_t item_size = 0;
     int * received_item_ptr = NULL;
@@ -574,9 +577,19 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
             
             result /= multisampling_index;
             
-            printf( "%d", result );
-            //adc_driver->m_data_logger.write_out( a );
+            if( true == adc_driver->m_isFilteringEnable )
+            {   
+                float filter_output = 0;
+                float filter_input = static_cast<float>(result); 
+                
+                eStatus = adc_driver->m_cascade_filter.calculate_output( filter_input, filter_output );
+                if( execStatus::SUCCESS == eStatus )
+                {
+                    result = static_cast<int>( filter_output );
+                }
+            }
             
+            //printf( "%d\n", result );
             /* minimum delay for Idle Task to do clean job and reset watchdog timer */
             vTaskDelay(1);
         }

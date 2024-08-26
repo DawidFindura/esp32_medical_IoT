@@ -8,8 +8,8 @@ const float iir_filter_a_coeff_high[3]={1.000000,-1.971567,0.971966};
 const float iir_filter_b_coeff_high[3]={0.985883,-1.971767,0.985883};
 
 /* stopband filter coefficients for power line noise; fc1 = 49 Hz fc2 = 51 Hz */
-const float iir_filter_a_coeff_stop[5]={1.000000,-2.113270,3.059843,-2.054015,0.944718};
-const float iir_filter_b_coeff_stop[5]={0.971966,-2.083643,3.060629,-2.083643,0.971966};
+const float iir_filter_a_coeff_stop[5]={1.0000000,  -2.1132703,   3.0598431,  -2.0540152,   0.9447179};
+const float iir_filter_b_coeff_stop[5]={0.9719659,  -2.0836427,   3.0606291,  -2.0836427,   0.9719659};
 
 /* lowpass filter coefficients for fc = 150 Hz */
 const float iir_filter_a_coeff_low[5]={1.000000,3.671729,5.067998,3.115967,0.719910};

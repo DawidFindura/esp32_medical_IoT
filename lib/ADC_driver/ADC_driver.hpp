@@ -34,7 +34,7 @@ namespace Driver
 
         } multisampling_mode_t;
 
-        ADC_driver( Filter::Cascade_filter & in_cascade_filter );
+        ADC_driver( Filter::Cascade_filter & in_cascade_filter, bool enableFiltering = true );
         ~ADC_driver();
 
         execStatus init();
@@ -76,11 +76,14 @@ namespace Driver
 
         } adc_dev_t;
 
+
           /**
          * @brief structure containg array of signal filters 
          */
         Filter::Cascade_filter & m_cascade_filter;
-
+        
+        bool m_isFilteringEnable;
+        
         /**
          * @brief structure representing ADC device
          */
