@@ -9,6 +9,7 @@ enum class execStatus
 {
     FAILURE,
     SUCCESS,
+    NOT_INITIALIZED,
     NULL_POINTER
 };
 

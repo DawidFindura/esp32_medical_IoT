@@ -1,7 +1,7 @@
 #ifndef I_FILTER_HPP
 #define I_FILTER_HPP
 
-#include "Enums/execStatus.hpp"
+#include "Enums/eExecStatus.hpp"
 
 namespace Interface
 {
@@ -12,7 +12,7 @@ namespace Interface
         virtual ~IFilter() = default;
 
         virtual execStatus calculate_output( const float filter_input, float & filter_output ) = 0;
-
+        
     };
 }
 
