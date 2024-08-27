@@ -274,7 +274,7 @@ execStatus WifiDriver::setWifiCredentials( const char * a_pcWifiPassword, const 
         m_pcWifiPassword = a_pcWifiPassword;
         m_pcWifiSSID = a_pcWifiSSID;
 
-        execStatus ret = execStatus::SUCCESS;
+        ret = execStatus::SUCCESS;
         ESP_LOGI("WIFI_TEST","WIFI SET CREDENTIALS SUCCESSFUL");
     }
     
