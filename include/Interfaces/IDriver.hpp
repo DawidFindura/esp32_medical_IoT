@@ -2,6 +2,7 @@
 #define IDRIVER_HPP
 
 #include "Enums/eExecStatus.hpp"
+#include "../common.hpp"
 
 namespace Interface
 {
@@ -30,6 +31,11 @@ namespace Interface
          * @brief Stop execution of driver object task
          */
         virtual execStatus stop() = 0;
+
+        /**
+         * @brief forward the message from upper layer to driver
+         */
+        virtual execStatus forwardMessage( const pduMessage_t & pduMessage ) = 0;
     
     };
 };
