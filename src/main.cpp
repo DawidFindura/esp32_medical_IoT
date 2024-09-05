@@ -10,25 +10,44 @@
 #include "FIR_filter.hpp"
 #include "IIR_filer.hpp"
 #include "Cascade_filter.hpp"
+#include "common.hpp"
+#include "DriverManager.hpp"
+#include "StateManager.hpp"
 
 static Filter::IIR_filter iir_filter_h1( iir_filter_a_coeff_high, iir_filter_b_coeff_high, 3 );
 static Filter::IIR_filter iir_filter_h2( iir_filter_a_coeff_high, iir_filter_b_coeff_high, 3 );
 static Filter::IIR_filter iir_filter_low( iir_filter_a_coeff_low, iir_filter_b_coeff_low, 5 );
 static Filter::IIR_filter iir_filter_stop( iir_filter_a_coeff_stop, iir_filter_b_coeff_stop, 5 );
 
-static const char message1[11] = {'1','2','3','4','5','6','7','8','9','0' , '\0'};
-static const char message2[11] = {'1','2','3','4','5','6','7','8','9','0', '\0'};
-
 #define _VAL_TO_STRING( val )   #val
 #define VAL_TO_STRING( val )    _VAL_TO_STRING( val )
 
-#define ONE_SECOND_DELAY        1000   
+#define ONE_SECOND_DELAY        pdMS_TO_TICKS(1000)   
 
 static const char * TAG = "ADC_test";
 
 
 extern "C" void app_main() 
 {
+
+    Service::StateManager stateManager;
+    Service::DriverManager driverManager( stateManager, stateManager );
+    driverManager.start();
+    pduMessage_t message1, message2;
+    
+    message1.header.driverID = (uint8_t)eDriverID::AD8232_DRIVER;
+    message1.header.deviceID = 5;
+    message1.header.externalDev = 0;
+
+    char mess1[15] = "Hello ad8232_d";
+    char mess2[15] = "Hello max30102";
+
+    memcpy(message1.signals,mess1,15);
+    memcpy(message2.signals,mess2,15);
+
+    message2.header.deviceID = 4;
+    message2.header.driverID = (uint8_t)eDriverID::MAX30102_DRIVER;
+    message2.header.externalDev = 1; 
 
     execStatus eStatus = execStatus::FAILURE;
 
@@ -38,13 +57,13 @@ extern "C" void app_main()
     cascade_filter.add_filter( &iir_filter_low );
     cascade_filter.add_filter( &iir_filter_stop );
 
-    Driver::ADC_driver adc_device( cascade_filter, false );
-    adc_device.init();
-    adc_device.start();
-    adc_device.stop();
+    Driver::ADC_driver adc_device( driverManager, cascade_filter, false );
+    //adc_device.init();
+    //adc_device.start();
+    // adc_device.stop();
 
-    Driver::WifiDriver wifi_driver;
-    Driver::MqttDriver mqtt_driver;
+    Driver::WifiDriver wifi_driver( driverManager );
+    Driver::MqttDriver mqtt_driver( driverManager );
     
     eStatus = wifi_driver.init();
     if( execStatus::SUCCESS == eStatus )
@@ -64,7 +83,7 @@ extern "C" void app_main()
 
     if( execStatus::SUCCESS == eStatus )
     {
-        eStatus = mqtt_driver.sendDataToDriver( message1 );
+        eStatus = mqtt_driver.forwardMessage( message1 );
     }
     
     if( execStatus::SUCCESS != eStatus )
@@ -92,13 +111,14 @@ extern "C" void app_main()
         // }
 
 
-    
-        eStatus = mqtt_driver.sendDataToDriver(message2);
-      
-        
+        //driverManager.sendMessage( message1 );
+        //driverManager.sendMessage( message2);
+        //eStatus = mqtt_driver.forwardMessage(message2);
+        //mqtt_driver.forwardMessage(message1);
+        //UBaseType_t t = uxTaskGetStackHighWaterMark(NULL);
+        //printf(" WATER MARK: %d\n ", t);
+        vTaskDelay( pdMS_TO_TICKS(100) );
+        //driverManager.sendMessage( message2 );
 
-        UBaseType_t t = uxTaskGetStackHighWaterMark(NULL);
-        printf(" WATER MARK: %d\n ", t);
-        vTaskDelay( ONE_SECOND_DELAY );
     }
 } 
