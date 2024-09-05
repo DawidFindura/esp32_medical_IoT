@@ -2,6 +2,7 @@
 
 #include "MqttDriver.hpp"
 
+#define MAX_NUM_OF_TOPIC_NAMES    (5U)
 
 static const char * TAG = "MQTT test";
 
@@ -16,6 +17,8 @@ static const char * TAG = "MQTT test";
 static const char * pcDefaultMqttUri = "mqtt://192.168.100.5";
 
 static const uint32_t u32DefaultMqttPort = 1883;
+
+static const char * topicNames[] = {"AD8232_DRIVER", "MAX30102_DRIVER", "MQTT_DRIVER", "WIFI_DRIVER", "RTC_DRIVER"};
 
 /**
  * @brief default MQTT user name used during connection to MQTT broker
@@ -34,7 +37,7 @@ static const char * pcDefaultMqttUserName = "dawid_esp32";
  * @brief default MQTT topic used by MQTT client to subscribe and publish data 
  * 
  */
-static const char * pcDefaultTopic = "esp_32/test";
+static const char * pcDefaultTopic = MQTT_STATE_CHANGE_TOPIC;
 
 
 using namespace Driver;
@@ -47,7 +50,8 @@ using namespace Driver;
  * Especially sets URI of the MQTT broker, username and password of MQTT client in m_sClientConfig member 
  * structure to default values defined in MqttDriver.hpp file
  */
-MqttDriver::MqttDriver() : 
+MqttDriver::MqttDriver( Interface::IDriverManager & a_driverManager ) : 
+    m_driverManager( a_driverManager ),
     m_sClientConfig(),
     m_reconnectNum( 0 ),
     m_psMqttEventGroup( NULL ),
@@ -73,6 +77,12 @@ MqttDriver::MqttDriver() :
     m_sClientConfig.broker.address.port = u32DefaultMqttPort;
     m_sClientConfig.credentials.username = pcDefaultMqttUserName;
     //m_sClientConfig.credentials.authentication.password = pcDefaultMqttPassword;
+    
+    execStatus eStatus = m_driverManager.registerCommDriver( this, m_commDriverID );
+    if( execStatus::SUCCESS != eStatus )
+    {
+        ESP_LOGE( TAG, "Could not register driver: %d", (int)m_commDriverID );
+    }
 }
 
 /**
@@ -83,6 +93,7 @@ MqttDriver::MqttDriver() :
 MqttDriver::~MqttDriver()
 {
     this->deinit();
+    (void)m_driverManager.unregisterCommDriver( this, m_commDriverID );
 }
 
 /**
@@ -419,15 +430,14 @@ execStatus MqttDriver::stop()
     return ret;
 }
 
-execStatus MqttDriver::sendDataToDriver( const char * data )
+execStatus MqttDriver::forwardMessage( const pduMessage_t & pduMessage )
 {
     execStatus ret = execStatus::FAILURE;
     BaseType_t bStatus = pdFAIL;
 
-    const char * data_to_send = data;
     if( NULL != m_psPublisherQueueHandle )
     {
-        bStatus = xQueueSendToBack( m_psPublisherQueueHandle, data_to_send, 100 );
+        bStatus = xQueueSendToBack( m_psPublisherQueueHandle, &pduMessage, 100 );
     }
 
     if( pdPASS == bStatus )
@@ -435,8 +445,7 @@ execStatus MqttDriver::sendDataToDriver( const char * data )
         ret = execStatus::SUCCESS;
     }
     
-    return ret;
-    
+    return ret;   
 }
 
 void MqttDriver::mqttEventHandler( void * a_pvArgs, esp_event_base_t a_pcBase, int32_t a_i32EventID, void * a_pvEventData )
@@ -466,6 +475,10 @@ void MqttDriver::mqttEventHandler( void * a_pvArgs, esp_event_base_t a_pcBase, i
             }
 
             esp_mqtt_client_subscribe( psMqttClient, mqtt_driver->m_pcTopic, 0 );
+
+            /* last argument for retaining the message if the other client is not currently available */
+            esp_mqtt_client_publish( psMqttClient, MQTT_AVAILABILITY_PUBLISH_TOPIC, "esp32 available", 0, 2, 1 );
+
             mqtt_driver->m_reconnectNum = 0;
             xEventGroupSetBits( mqtt_driver->m_psMqttEventGroup, MqttDriver::MqttClientConnectedBit );
             break;
@@ -561,24 +574,34 @@ void MqttDriver::dataReceiverTask( void * a_pvArgs )
     /*cast void pointer passed as argument of Receiver task to pointer to MqttDriver object */
     MqttDriver * mqtt_driver = static_cast<MqttDriver *>( a_pvArgs );
 
-    uint8_t au8ReceivedData[ m_u8PduItemSize ] = {};
+    pduMessage_t receivedPduMessage;
+
     BaseType_t bStatus = pdFAIL;
+    execStatus eStatus = execStatus::FAILURE;
 
     /*indefinitely wait for message in the queue*/
     const TickType_t ticksToWait = portMAX_DELAY;
 
     for( ;; )
     {
+        receivedPduMessage = {};
+
         /*wait for message passed into the queue. If queue is empty change state of the current task to blocked */
-        bStatus = xQueueReceive( mqtt_driver->m_psReceiverQueueHandle, au8ReceivedData, ticksToWait );
+        bStatus = xQueueReceive( mqtt_driver->m_psReceiverQueueHandle, &receivedPduMessage, ticksToWait );
 
         if( pdPASS == bStatus )
         {
-            ESP_LOGI("Reader TASK", "Received the message. Message length %d:", sizeof( au8ReceivedData ) );
+            ESP_LOGI("Reader TASK", "Received the message. Message length %d:", sizeof( pduMessage_t ) );
             
-            /* TO DO */
-            //memcpy( &sPduMessage, au8ReceivedData, sizeof( au8ReceivedData ) );
-            //driverManager->sendData( sPduMessage );
+            eStatus = mqtt_driver->m_driverManager.sendMessage( receivedPduMessage );
+            if( execStatus::SUCCESS != eStatus )
+            {
+                ESP_LOGE( TAG, "Failed to send the message to driver manager" );
+            }
+        }
+        else
+        {
+            ESP_LOGE( TAG, "Could not receive the message from the queue" );
         }
     }    
 }
@@ -587,11 +610,7 @@ void MqttDriver::dataPublisherTask( void * a_pvArgs )
 {
     BaseType_t bStatus = pdFAIL;
     
-    /* TO DO */
-    struct sReceivedPdu
-    {
-        char data[m_u8PduItemSize];
-    } sReceivedPdu;
+    pduMessage_t messageToPublish;
 
     /* cast void pointer passed as argument of Receiver task to pointer to MqttDriver object */
     MqttDriver * mqtt_driver = static_cast<MqttDriver *>( a_pvArgs );
@@ -606,14 +625,18 @@ void MqttDriver::dataPublisherTask( void * a_pvArgs )
     for ( ;; )
     {
         /*wait for message passed into the queue. If its empty the change state to blocked task*/
-        bStatus = xQueueReceive( mqtt_driver->m_psPublisherQueueHandle, &sReceivedPdu, ticksToWait );
+        bStatus = xQueueReceive( mqtt_driver->m_psPublisherQueueHandle, &messageToPublish, ticksToWait );
 
         if( pdPASS == bStatus )
         {
-            memcpy( acDataBuf, &sReceivedPdu, sizeof( sReceivedPdu ) );
+            memcpy( acDataBuf, &messageToPublish, sizeof( messageToPublish ) );
             char * pcDataToSend = static_cast<char *>( &acDataBuf[0] );
             
-            i32MsgID = esp_mqtt_client_publish( mqtt_driver->m_mqttClientHandle, mqtt_driver->m_pcTopic, pcDataToSend, m_u8PduItemSize, 0, 0 );
+            uint8_t topicIndex = messageToPublish.header.driverID;
+            if( topicIndex < MAX_NUM_OF_TOPIC_NAMES )
+            {
+                i32MsgID = esp_mqtt_client_publish( mqtt_driver->m_mqttClientHandle, topicNames[topicIndex], pcDataToSend, m_u8PduItemSize, 0, 0 );
+            }
             
             /* chceck the message id after publishing; equals 0 on successfull publish */
             if( ( -1 == i32MsgID ) || ( -2 == i32MsgID ) )

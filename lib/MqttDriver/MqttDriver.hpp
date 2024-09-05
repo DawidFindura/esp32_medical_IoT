@@ -10,14 +10,12 @@
 #include <mqtt_client.h>
 
 #include "Interfaces/IDriver.hpp"
+#include "DriverManager.hpp"
 #include "Enums/eDriverState.hpp"
 #include "Enums/eExecStatus.hpp"
+#include "Enums/eDriverID.hpp"
+#include "common.hpp"
 
-/* TO DO */
-static struct sPdu
-{
-    char data[ 11 ];
-} sPdu;
 
 namespace Driver
 {
@@ -31,6 +29,10 @@ namespace Driver
     {
     private:
         
+        Interface::IDriverManager & m_driverManager;
+
+        const eCommDriverID m_commDriverID = eCommDriverID::MQTT_DRIVER;
+
         /**
          * @brief MQTT client configuration structure
          * 
@@ -65,7 +67,7 @@ namespace Driver
          * @brief  size of item being passed into to the queues
          * 
          */
-        static const uint8_t m_u8PduItemSize = sizeof( sPdu );
+        static const uint8_t m_u8PduItemSize = sizeof( pduMessage_t );
 
         /**
          * @brief MQTT message receiver task priority
@@ -240,7 +242,7 @@ namespace Driver
 
     public:
         
-        MqttDriver();
+        MqttDriver( Interface::IDriverManager & driverManager );
         /**
          * @brief Destructor of MqttDriver class. Destroys the MqttDriver object.
          * 
@@ -287,11 +289,11 @@ namespace Driver
         execStatus stop();
 
         /**
-         * @brief Publish data message PDU contained in a_rsMessage structure to MQTT broker. 
+         * @brief Publish data message PDU contained in pduMessage_t structure to MQTT broker. 
          * 
          * @return execStatus  The method execution status: SUCCESS or FAILURE
          */
-        execStatus sendDataToDriver( const char * data  );
+        execStatus forwardMessage( const pduMessage_t & pduMessage );
 
         /**
          * @brief Sets the MQTT broker URI and credentials for authentication purposes. 
