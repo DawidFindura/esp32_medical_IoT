@@ -10,9 +10,10 @@
 #include <esp_wifi.h>
 
 #include "Interfaces/IDriver.hpp"
+#include "Interfaces/IDriverManager.hpp"
 #include "Enums/eExecStatus.hpp"
 #include "Enums/eDriverState.hpp"
-
+#include "Enums/eDriverID.hpp"
 
 /**
  * @brief namespace grouping all divers in the project.
@@ -28,6 +29,9 @@ namespace Driver
     class WifiDriver : public Interface::IDriver
     {
     private:
+
+        Interface::IDriverManager & m_driverManager;
+        const eCommDriverID m_commDriverID = eCommDriverID::WIFI_DRIVER;
 
         /**
          * @brief Wifi password for Wifi network that driver is trying to connect to
@@ -116,7 +120,7 @@ namespace Driver
          * @brief Construct a new Wifi Driver object
          * 
          */
-        WifiDriver();
+        WifiDriver( Interface::IDriverManager & driverManager );
 
         /**
          * @brief Destroy the Wifi Driver object
@@ -164,7 +168,7 @@ namespace Driver
          * @param a_rsMessage [IN] reference to sPdu structure containing message to send to driver from driver manager module.
          * @return eStatus enum decribing result of function execution: SUCCESS or FAILURE
          */
-        execStatus sendDataToDriver();
+        execStatus forwardMessage(const pduMessage_t & message);
 
         /**
          * @brief Sets the Wifi Credentials like password and SSID of Wifi network

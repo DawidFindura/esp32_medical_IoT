@@ -22,7 +22,8 @@ static const char * TAG = "WIFI TEST";
 
 using namespace Driver;
 
-WifiDriver::WifiDriver() : 
+WifiDriver::WifiDriver( Interface::IDriverManager & driverManager ) :
+        m_driverManager( driverManager ),
         m_u8RetryNum( 0 ),
         m_eState( eDriverState::UNINITIALIZED ),
         m_psWifiEventGroup( NULL ), 
@@ -34,6 +35,12 @@ WifiDriver::WifiDriver() :
     m_pcWifiSSID = defaultWifiSSID;
     memcpy( m_uWifiConfig.sta.ssid, defaultWifiSSID, strlen( defaultWifiSSID ) );
     memcpy( m_uWifiConfig.sta.password, defaultWifiPassword, strlen( defaultWifiPassword ) );
+
+    execStatus eStatus = m_driverManager.registerCommDriver( this, m_commDriverID );
+    if( execStatus::SUCCESS != eStatus )
+    {
+        ESP_LOGE( TAG, "Could not register driver: %d", (int)m_commDriverID );
+    }
 }
 
 WifiDriver::~WifiDriver()
@@ -45,6 +52,8 @@ WifiDriver::~WifiDriver()
     {
         ESP_LOGE(TAG, "Deinit unsuccessful");
     }
+
+    m_driverManager.unregisterCommDriver( this, m_commDriverID );
 }
 
 execStatus WifiDriver::init()
@@ -258,6 +267,12 @@ execStatus WifiDriver::stop()
     }
 
     return ret;
+}
+
+
+execStatus WifiDriver::forwardMessage( const pduMessage_t & message )
+{
+    return execStatus::FAILURE;
 }
 
 
