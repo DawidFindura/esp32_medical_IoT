@@ -9,8 +9,10 @@
 #include <freertos/semphr.h>
 
 #include "Interfaces/IDriver.hpp"
+#include "Interfaces/IDriverManager.hpp"
 #include "Enums/eExecStatus.hpp"
 #include "Enums/eDriverState.hpp"
+#include "Enums/eDriverID.hpp"
 #include "DataLogger.hpp"
 #include "Cascade_filter.hpp"
 
@@ -34,13 +36,14 @@ namespace Driver
 
         } multisampling_mode_t;
 
-        ADC_driver( Filter::Cascade_filter & in_cascade_filter, bool enableFiltering = true );
+        ADC_driver( Interface::IDriverManager & driverManager, Filter::Cascade_filter & in_cascade_filter, bool enableFiltering = true );
         ~ADC_driver();
 
         execStatus init();
         execStatus deinit();
         execStatus start();
         execStatus stop();
+        execStatus forwardMessage( const pduMessage_t & pduMessage );
 
         execStatus setBitwidth( adc_bitwidth_t adc_bitwidth );
         execStatus setAttenuation( adc_atten_t adc_atten );
@@ -52,6 +55,9 @@ namespace Driver
     
     private:
 
+        Interface::IDriverManager & m_driverManager;
+        const eDriverID m_driverID = eDriverID::AD8232_DRIVER;
+        
         typedef struct adc_dev
         {
             /* default configuration of ADC driver */
@@ -117,6 +123,16 @@ namespace Driver
          * @brief semaphore used to synchronize adc data processor task
          */
         SemaphoreHandle_t m_adc_data_proc_semphr;
+
+        /**
+         * @brief semaphore uset to notify main task that it finished its job
+         */
+        SemaphoreHandle_t m_adc_data_proc_finished_semphr;
+
+        /**
+         * @brief semaphore uset to notify main task that it finished its job
+         */
+        SemaphoreHandle_t m_adc_data_reader_finished_semphr;
 
         /**
          * @brief data logger for writing out adc conversion result via uart/usb bridge 

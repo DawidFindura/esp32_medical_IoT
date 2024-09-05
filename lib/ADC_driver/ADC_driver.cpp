@@ -15,12 +15,13 @@
 #define ADC_DATA_READER_TASK_PRIORITY       5
 
 #define ADC_DATA_PROC_TASK_STACK_SIZE       10000 // bytes
-#define ADC_DATA_PROC_TASK_PRIORITY         ADC_DATA_READER_TASK_PRIORITY
+#define ADC_DATA_PROC_TASK_PRIORITY         (ADC_DATA_READER_TASK_PRIORITY)
 #define ADC_DATA_PROC_BUFFER_SIZE           ()
 
 #define ADC_DATA_RING_BUFFER_ITEM_SIZE      sizeof(int)
 #define ADC_DATA_RING_BUFFER_MAX_ITEMS      3200
 
+#define MAX_NUM_OF_ITEMS_IN_PDU_MESS        (4U) 
 
 static const char * TAG = " ADC_driver";
 
@@ -29,8 +30,9 @@ using namespace Driver;
 
 // public function definitions
 
-ADC_driver::ADC_driver( Filter::Cascade_filter & in_cascade_filter, bool enableFiltering ) :   
+ADC_driver::ADC_driver( Interface::IDriverManager & driverManager, Filter::Cascade_filter & in_cascade_filter, bool enableFiltering ) :   
     
+    m_driverManager( driverManager ),
     m_cascade_filter( in_cascade_filter ),
     m_isFilteringEnable( enableFiltering ),
     m_adc_device(),
@@ -40,15 +42,27 @@ ADC_driver::ADC_driver( Filter::Cascade_filter & in_cascade_filter, bool enableF
     m_adc_data_ring_buff_handle( NULL ),
     m_adc_data_reader_semphr( NULL ),
     m_adc_data_proc_semphr( NULL ),
+    m_adc_data_proc_finished_semphr( NULL ),
+    m_adc_data_reader_finished_semphr( NULL ),
     m_data_logger()
     
 {
-
+    execStatus eStatus = m_driverManager.registerDriver( this, m_driverID );
+    if( execStatus::SUCCESS != eStatus )
+    {
+        ESP_LOGE( TAG, "Could not register driver: %d", (int)m_driverID );
+    }
 }
 
 ADC_driver::~ADC_driver()
 {
     (void)this-> deinit();
+    
+    execStatus eStatus = m_driverManager.unregisterDriver( this, m_driverID );
+    if( execStatus::SUCCESS != eStatus )
+    {
+        ESP_LOGE( TAG, "Could not unregister driver: %d", (int)m_driverID );
+    }
 }
 
 execStatus ADC_driver::init()
@@ -73,7 +87,7 @@ execStatus ADC_driver::init()
     m_adc_data_reader_semphr = xSemaphoreCreateBinary();
     if( NULL == m_adc_data_reader_semphr )
     {
-        ESP_LOGW( TAG, "Failed to create binary semaphore for data reader task" );
+        ESP_LOGW( TAG, "Failed to create binary start semaphore for data reader task" );
         return eStatus = execStatus::FAILURE;   
     }
 
@@ -81,7 +95,23 @@ execStatus ADC_driver::init()
     m_adc_data_proc_semphr = xSemaphoreCreateBinary();
     if( NULL == m_adc_data_proc_semphr )
     {
-        ESP_LOGW( TAG, "Failed to create binary semaphore for data processor task" );
+        ESP_LOGW( TAG, "Failed to create binary start semaphore for data processor task" );
+        return eStatus = execStatus::FAILURE;   
+    }
+
+     /* Creation of task synchronizing semaphore */
+    m_adc_data_reader_finished_semphr = xSemaphoreCreateBinary();
+    if( NULL == m_adc_data_reader_finished_semphr )
+    {
+        ESP_LOGW( TAG, "Failed to create binary finished semaphore for data reader task" );
+        return eStatus = execStatus::FAILURE;   
+    }
+
+    /* Creation of task synchronizing semaphore */
+    m_adc_data_proc_finished_semphr = xSemaphoreCreateBinary();
+    if( NULL == m_adc_data_proc_finished_semphr )
+    {
+        ESP_LOGW( TAG, "Failed to create binary finished semaphore for data processor task" );
         return eStatus = execStatus::FAILURE;   
     }
 
@@ -144,6 +174,8 @@ execStatus ADC_driver::init()
         m_adc_driver_state = eDriverState::INITIALIZED;
     }
 
+    ESP_LOGI( TAG, "driver initialized with status code: %d", (int)eStatus );
+
     return eStatus;
 }
 
@@ -168,9 +200,32 @@ execStatus ADC_driver::deinit()
         return eStatus = execStatus::FAILURE;
     }
 
+    vTaskDelete( m_adc_data_proc_task_handle );
+    m_adc_data_proc_task_handle = NULL;
+
+    vTaskDelete( m_adc_data_reader_task_handle );
+    m_adc_data_reader_task_handle = NULL;
+
+    vRingbufferDelete( m_adc_data_ring_buff_handle );
+    m_adc_data_ring_buff_handle = NULL;
+
+    vSemaphoreDelete( m_adc_data_reader_semphr );
+    m_adc_data_reader_semphr = NULL;
+
+    vSemaphoreDelete( m_adc_data_proc_semphr );
+    m_adc_data_proc_semphr = NULL;
+
+    vSemaphoreDelete( m_adc_data_reader_finished_semphr );
+    m_adc_data_reader_finished_semphr = NULL;
+
+    vSemaphoreDelete( m_adc_data_proc_finished_semphr );
+    m_adc_data_proc_finished_semphr = NULL;
+
     esp_err = adc_continuous_deinit( m_adc_device.adc_continuous_mode_drv_handle );
     if( ESP_OK == esp_err )
     {
+        m_adc_device.adc_continuous_mode_drv_handle = NULL;
+
         eStatus = execStatus::SUCCESS;
         m_adc_driver_state = eDriverState::DEINITIALIZED;
     }
@@ -195,32 +250,35 @@ execStatus ADC_driver::start()
         return eStatus = execStatus::FAILURE;
     }
 
+
+    m_adc_driver_state = eDriverState::STARTED;
+
+    if( NULL != m_adc_data_reader_semphr )
+    {  
+        if( pdTRUE != xSemaphoreGive( m_adc_data_reader_semphr ) )
+        {
+            ESP_LOGW( TAG, "Failed to release semaphore and start the adc data reader task!!!" );
+            return eStatus = execStatus::FAILURE;
+        }
+    }
+
+    if( NULL != m_adc_data_proc_semphr )
+    {  
+        if( pdTRUE != xSemaphoreGive( m_adc_data_proc_semphr ) )
+        {
+            ESP_LOGW( TAG, "Failed to release semaphore and start the adc data processor task!!!" );
+            return eStatus = execStatus::FAILURE;
+        }
+    }
+        
     esp_err = adc_continuous_start( m_adc_device.adc_continuous_mode_drv_handle );
     if( ESP_OK == esp_err )
     {
-        m_adc_driver_state = eDriverState::STARTED;
-
-        if( NULL != m_adc_data_reader_semphr )
-        {  
-            if( pdTRUE != xSemaphoreGive( m_adc_data_reader_semphr ) )
-            {
-                ESP_LOGW( TAG, "Failed to release semaphore and start the adc data reader task!!!" );
-                return eStatus = execStatus::FAILURE;
-            }
-        }
-
-        if( NULL != m_adc_data_proc_semphr )
-        {  
-            if( pdTRUE != xSemaphoreGive( m_adc_data_proc_semphr ) )
-            {
-                ESP_LOGW( TAG, "Failed to release semaphore and start the adc data processor task!!!" );
-                return eStatus = execStatus::FAILURE;
-            }
-        }
-        
         eStatus = execStatus::SUCCESS;
     }
-   
+
+    ESP_LOGI( TAG, "driver started with status code: %d", (int)eStatus );
+
     return eStatus;
 }
 
@@ -235,15 +293,31 @@ execStatus ADC_driver::stop()
         return eStatus;
     }
 
+    m_adc_driver_state = eDriverState::STOPPED;
+
+    if( pdTRUE == xSemaphoreTake( m_adc_data_reader_finished_semphr, portMAX_DELAY ) )
+    {
+        ESP_LOGI( TAG, "Data reader task finished" );
+    }
+
     esp_err = adc_continuous_stop( m_adc_device.adc_continuous_mode_drv_handle );
     if( ESP_OK == esp_err )
-    {
-        eStatus = execStatus::SUCCESS;
-        m_adc_driver_state = eDriverState::STOPPED;
+    {   
+        if( pdTRUE == xSemaphoreTake( m_adc_data_proc_finished_semphr, portMAX_DELAY ) )
+        {
+            ESP_LOGI( TAG, "Data processor task finished" );
+            eStatus = execStatus::SUCCESS;
+        } 
     }
     
     return eStatus;
 }
+
+execStatus ADC_driver::forwardMessage( const pduMessage_t & pduMessage )
+{
+    return execStatus::FAILURE;
+}
+
 
 execStatus ADC_driver::setBitwidth( adc_bitwidth_t a_adc_bitwidth )
 {
@@ -466,7 +540,7 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
     uint8_t adc_raw_result[ CONVERSION_FRAME_SIZE ] = {0}; 
     uint32_t read_result_len = 0;
     const uint32_t timeout_ms = 100;
-    const TickType_t ticks_to_wait_for_room = pdMS_TO_TICKS( 10 ); // 10 ms
+    const TickType_t ticks_to_wait_for_room = pdMS_TO_TICKS( 100 ); // 100 ms
 
     esp_err_t esp_err = ESP_FAIL;
     adc_continuous_handle_t adc_handle = NULL;
@@ -480,9 +554,12 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
         /* Wait in blocked state until the task is explicitly started */
         while( eDriverState::STARTED != adc_driver->m_adc_driver_state )
         {
-            ESP_LOGI( TAG, "Waiting in blocked state until samphore is given" );
-            (void)xSemaphoreTake( adc_driver->m_adc_data_reader_semphr, portMAX_DELAY );
-            ESP_LOGI( TAG, "Task is explicitly started" );
+            ESP_LOGI( TAG, "Data reader task: Waiting in blocked state until samphore is given" );
+            if( pdTRUE == xSemaphoreTake( adc_driver->m_adc_data_reader_semphr, portMAX_DELAY ) )
+            {
+                ESP_LOGI( TAG, "Data reader task: Task is explicitly started" );
+            }
+            
         }
     
         adc_handle = adc_driver->m_adc_device.adc_continuous_mode_drv_handle;
@@ -529,9 +606,11 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
                 }
             }
             /* minimum delay for Idle Task to do clean job and reset watchdog timer */
-            vTaskDelay(1);
+            //vTaskDelay( pdMS_TO_TICKS( 1 ) );
         }
-
+        /* task signals main task that it finsihed */
+        xSemaphoreGive( adc_driver->m_adc_data_reader_finished_semphr );
+        
         /* if task is stopped and go out of the while loop the control goes to the beginning of the task code */
         goto task_beginning;
 }
@@ -542,9 +621,17 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
 
     RingbufHandle_t ring_buff_handle = NULL;
     size_t item_size = 0;
+    uint8_t signalIndex = 0;
+    int pduBuff[MAX_NUM_OF_ITEMS_IN_PDU_MESS] = {};
+    
     int * received_item_ptr = NULL;
 
     ADC_driver * adc_driver = static_cast<ADC_driver *>( pvUserData );
+    
+    pduMessage_t pduToSend;
+    pduToSend.header.driverID = (uint8_t)adc_driver->m_driverID;
+    pduToSend.header.deviceID = 0;
+    pduToSend.header.externalDev = 0;
     
      /* label for goto statement */
     task_beginning:
@@ -552,18 +639,23 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
         /* Wait in blocked state until the task is explicitly started */
         while( eDriverState::STARTED != adc_driver->m_adc_driver_state )
         {
-            ESP_LOGI( TAG, "Waiting in blocked state until samphore is given" );
-            (void)xSemaphoreTake( adc_driver->m_adc_data_proc_semphr, portMAX_DELAY );
-            ESP_LOGI( TAG, "Task is explicitly started" );
+            ESP_LOGI( TAG, "Data proc task: Waiting in blocked state until samphore is given" );
+            if( pdTRUE == xSemaphoreTake( adc_driver->m_adc_data_proc_semphr, portMAX_DELAY ) )
+            {
+                ESP_LOGI( TAG, "Data proc task: Task is explicitly started" );
+            }
         }
     
         ring_buff_handle = adc_driver->m_adc_data_ring_buff_handle;
         int multisampling_window_size = static_cast<int>( adc_driver->m_adc_device.multisampling_mode );
+        bool itemsWaiting = false;
 
-        while( eDriverState::STARTED == adc_driver->m_adc_driver_state )
+        /* task can go into stopped state only after it empties the ring buffer */
+        while( eDriverState::STARTED == adc_driver->m_adc_driver_state || itemsWaiting )
         {  
             int result = 0;
             int multisampling_index = 0;
+            UBaseType_t numOfItemsWaiting = 0;
 
             do
             {
@@ -572,8 +664,18 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
                 result += *received_item_ptr;
                 vRingbufferReturnItem( ring_buff_handle, (void *)received_item_ptr );
                 multisampling_index++;
-
-            } while ( multisampling_index < multisampling_window_size );
+                
+                vRingbufferGetInfo( ring_buff_handle, NULL, NULL, NULL, NULL, &numOfItemsWaiting );
+                if( numOfItemsWaiting > 0 )
+                {
+                    itemsWaiting = true;
+                }
+                else
+                {
+                    itemsWaiting = false;
+                }
+                
+            } while ( (multisampling_index < multisampling_window_size) && itemsWaiting );
             
             result /= multisampling_index;
             
@@ -589,10 +691,25 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
                 }
             }
             
-            //printf( "%d\n", result );
+            if( signalIndex < MAX_NUM_OF_ITEMS_IN_PDU_MESS )
+            {
+                pduBuff[signalIndex] = result;
+                signalIndex++;
+            }
+            else
+            {   
+                memcpy( pduToSend.signals, pduBuff, sizeof(pduBuff) );
+                execStatus eStatus = adc_driver->m_driverManager.sendMessage( pduToSend );
+                ESP_LOGI( TAG, "Sending the message to driver manager with status code: %d", (int)eStatus );
+                signalIndex = 0;
+            }
+            
             /* minimum delay for Idle Task to do clean job and reset watchdog timer */
-            vTaskDelay(1);
+            //vTaskDelay( pdMS_TO_TICKS( 1 ));
         }
+
+        /* task signals that it finished  */
+        xSemaphoreGive( adc_driver->m_adc_data_proc_finished_semphr );
 
         /* if task is stopped and go out of the while loop the control goes to the beginning of the task code */
         goto task_beginning;
