@@ -54,6 +54,57 @@
 #define MAX30102_REG_ADDR_PART_ID                  (0xFF)        
 
 
+/* interrupts types */
+#define MAX30102_INTR_TYPE_PWRRDY                  (1 << 0)
+#define MAX30102_INTR_TYPE_DIETEMP_RDY             (1 << 1)
+#define MAX30102_INTR_TYPE_AMBILITOVF              (1 << 5)
+#define MAX30102_INTR_TYPE_NEWSAMPLE               (1 << 6)
+#define MAX30102_INTR_TYPE_ALMFULL                 (1 << 7)
+
+
+
+typedef enum {
+    MAX31_MODE_STARTUP = 0,
+    MAX31_MODE_HEARTRATE_RED = 0x02, /** Red led only **/
+    MAX31_MODE_SPO2_RED_IR = 0x03,  /** Red and IR **/
+    MAX31_MODE_MULTILED_RIR = 0x07, /** Red and IR **/
+} max30102_mode_t;
+
+typedef enum {
+    MAX31_LED_PWM_69  = 0b0,
+    MAX31_LED_PWM_118 = 0b01,
+    MAX31_LED_PWM_215 = 0b10,
+    MAX31_LED_PWM_411 = 0b11
+} max30102_ledpwm_t;
+
+typedef enum {
+    MAX31_SAMPLERATE_50 = 0,
+    MAX31_SAMPLERATE_100,
+    MAX31_SAMPLERATE_200,
+    MAX31_SAMPLERATE_400,
+    MAX31_SAMPLERATE_800,
+    MAX31_SAMPLERATE_1000,
+    MAX31_SAMPLERATE_1600,
+    MAX31_SAMPLERATE_3200,
+} max30102_samplerate_t;
+
+typedef enum {
+    MAX31_ADC_RNG_2048,
+    MAX31_ADC_RNG_4096,
+    MAX31_ADC_RNG_8192,
+    MAX31_ADC_RNG_16384,
+} max30102_adcrange_t;
+
+typedef enum {
+    MAX31_SAMPLE_AVG_1 = 0,
+    MAX31_SAMPLE_AVG_2 = 1,
+    MAX31_SAMPLE_AVG_4 = 2,
+    MAX31_SAMPLE_AVG_8 = 3,
+    MAX31_SAMPLE_AVG_16 = 4,
+    MAX31_SAMPLE_AVG_32 = 5,
+} max30102_sampleavg_t;
+
+
 
 /*MAX30102 registers structures*/
 typedef struct {

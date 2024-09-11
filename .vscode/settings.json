@@ -5,6 +5,7 @@
         "limits": "cpp",
         "type_traits": "cpp",
         "system_error": "cpp",
-        "i2c.h": "c"
+        "i2c.h": "c",
+        "compare": "cpp"
     }
 }

@@ -1,5 +1,6 @@
 #include <esp_log.h>
 #include <esp_err.h>
+#include <string.h>
 
 #include "i2c_api.h"
 #include "max30102_driver.h"
@@ -43,7 +44,7 @@ static esp_err_t max30102_get_fifo_wr_ptr(max30102_device_t *dev, int8_t *reg_va
 {   
     esp_err_t error = ESP_OK;
 
-    error = max30102_get_register((max30102_generic_register_t *) &(dev->registers.fifo_wr_ptr_reg));
+    error = max30102_get_register((max30102_generic_register_t *) &(dev->registers.fifo_wr_ptr_reg), 1);
     
     if(error == ESP_OK) {
         *reg_val = dev->registers.fifo_wr_ptr_reg.fifo_wr_ptr_bits;
@@ -56,7 +57,7 @@ static esp_err_t max30102_get_fifo_rd_ptr(max30102_device_t *dev, int8_t *reg_va
 {   
     esp_err_t error = ESP_OK;
 
-    error = max30102_get_register((max30102_generic_register_t *) &(dev->registers.fifo_rd_ptr_reg));
+    error = max30102_get_register((max30102_generic_register_t *) &(dev->registers.fifo_rd_ptr_reg), 1);
     
     if(error == ESP_OK) {
         *reg_val = dev->registers.fifo_rd_ptr_reg.fifo_rd_ptr_bits;
@@ -65,26 +66,129 @@ static esp_err_t max30102_get_fifo_rd_ptr(max30102_device_t *dev, int8_t *reg_va
     return error;  
 }
 
+static esp_err_t adc_shift_from_pwm( max30102_device_t * dev, uint8_t * adc_shift ) 
+{
+    esp_err_t esp_err = ESP_FAIL;
+    
+    uint8_t shift = 0;
+    max30102_ledpwm_t pwm = dev->led_pwm;
+
+    switch(pwm) {
+        case MAX31_LED_PWM_69:
+        /** adc resolution = 15 bits **/
+            shift = 3;
+            esp_err = ESP_OK;
+            break;
+        case MAX31_LED_PWM_118:
+        /** adc resolution 16 bits **/
+            shift = 2;
+            esp_err = ESP_OK;
+            break;
+        case MAX31_LED_PWM_215:
+        /** adc res 17 bits **/
+            shift = 1;
+            esp_err = ESP_OK;
+            break;
+        case MAX31_LED_PWM_411:
+        /** adc res 18 bits **/
+            shift = 0;
+            esp_err = ESP_OK;
+            break;
+        default:
+            ESP_LOGE( TAG, "Error - invalid ledpwm set");
+            esp_err = ESP_FAIL;
+            break;
+    }
+
+    if( NULL != adc_shift )
+    {
+        *adc_shift = shift;
+    }
+    else
+    {
+        esp_err = ESP_ERR_INVALID_ARG;
+    }
+
+    return esp_err;
+}
+
+static esp_err_t conversion_factor_from_adcrange( max30102_device_t * dev, float * conversion_factor )
+{
+    esp_err_t esp_err = ESP_FAIL;
+
+    float factor = 0;
+    max30102_adcrange_t adc_range = dev->adc_range;
+
+    switch (adc_range)
+    {
+        case MAX31_ADC_RNG_2048:
+            factor = 7.81;
+            esp_err = ESP_OK;
+            break;
+        case MAX31_ADC_RNG_4096:
+            factor = 15.63;
+            esp_err = ESP_OK;
+            break;
+        case MAX31_ADC_RNG_8192:
+            factor = 31.25;
+            esp_err = ESP_OK;
+            break;
+        case MAX31_ADC_RNG_16384:
+            factor = 62.5;
+            esp_err = ESP_OK;
+            break;
+        default:
+            ESP_LOGE(TAG, "Error - invalid adcrange set");
+            esp_err = ESP_FAIL;
+            break;
+    }
+
+    if( NULL != conversion_factor )
+    {
+        *conversion_factor = factor;
+    }
+    else
+    {
+        esp_err = ESP_ERR_INVALID_ARG;
+    }
+    
+    return esp_err;
+}
+
 static esp_err_t max30102_get_fifo_sample(max30102_device_t *dev, uint32_t *red_data, uint32_t *ir_data)
 {
     esp_err_t error = ESP_OK;
+    
     uint8_t data_temp[6];
     *red_data = 0;
     *ir_data = 0;
-   
+
+    float conversion_factor = 0.0f;
+    uint8_t adc_shift = 0;
+
+    error = conversion_factor_from_adcrange( dev, &conversion_factor );
+    if( ESP_OK != error )
+    {
+        return error;
+    }
+
+    error = adc_shift_from_pwm( dev, &adc_shift );
+    if( ESP_OK != error )
+    {
+        return error;
+    }
+
     uint8_t dev_addr = MAX30102_I2C_ADDRESS;
     uint8_t reg_addr = dev->registers.fifo_data_reg.reg_addr;
 
     error = i2c_device_register_read(dev_addr, reg_addr, &data_temp[0], 6);
      
     if(error == ESP_OK) {
-        *red_data += data_temp[0] << 16;
-        *red_data += data_temp[1] << 8;
-        *red_data += data_temp[2];
+        *red_data = ( data_temp[0] << 16 ) | ( data_temp[1] << 8 ) | ( data_temp[2] );
+        *red_data = *red_data >> adc_shift;
 
-        *ir_data += data_temp[3] << 16;
-        *ir_data += data_temp[4] << 8;
-        *ir_data += data_temp[5];
+        *ir_data = ( data_temp[3] << 16 ) | ( data_temp[4] << 8 ) | ( data_temp[5] );
+        *ir_data = *ir_data >> adc_shift;
     }
     
 
@@ -100,38 +204,50 @@ static inline void max30102_reg_addr_init(max30102_generic_register_t *start_reg
 }
 
 
+
 /* Public functions definitions */
 
 esp_err_t max30102_default_config_init(max30102_device_t * max30102_device )
 {   
     max30102_device->max30102_i2c_master_port = I2C_MASTER_PORT;
 
-    max30102_device->max30102_i2c_cfg.mode = I2C_MODE_MASTER;
-    max30102_device->max30102_i2c_cfg.sda_io_num = I2C_MASTER_SDA_IO_NUM;
-    max30102_device->max30102_i2c_cfg.scl_io_num = I2C_MASTER_SCL_IO_NUM;   
-    max30102_device->max30102_i2c_cfg.sda_pullup_en = GPIO_PULLUP_DISABLE;     
-    max30102_device->max30102_i2c_cfg.scl_pullup_en = GPIO_PULLUP_DISABLE;     
-    max30102_device->max30102_i2c_cfg.master.clk_speed = I2C_MASTER_FREQ;
-    max30102_device->max30102_i2c_cfg.clk_flags = 0;
+    max30102_device->max30102_i2c_cfg.mode              = I2C_MODE_MASTER;
+    max30102_device->max30102_i2c_cfg.sda_io_num        = I2C_MASTER_SDA_IO_NUM;
+    max30102_device->max30102_i2c_cfg.scl_io_num        = I2C_MASTER_SCL_IO_NUM;   
+    max30102_device->max30102_i2c_cfg.sda_pullup_en     = GPIO_PULLUP_DISABLE;     
+    max30102_device->max30102_i2c_cfg.scl_pullup_en     = GPIO_PULLUP_DISABLE;     
+    max30102_device->max30102_i2c_cfg.master.clk_speed  = I2C_MASTER_FREQ;
+    max30102_device->max30102_i2c_cfg.clk_flags         = 0;    // default clock configuration for demanded i2c communication frequency
 
-    max30102_device->registers.intr_enable_1_reg.a_full_en_bit = 1;                   
-    max30102_device->registers.intr_enable_1_reg.ppg_rdy_en_bit = 1;  
 
-    max30102_device->registers.intr_enable_2_reg.die_temp_rdy_en_bit = 1;
+    max30102_device->registers.intr_enable_1_reg.a_full_en_bit            = 1;      // enable fifo almost full interrupt              
+    max30102_device->registers.intr_enable_1_reg.ppg_rdy_en_bit           = 0;      // disable interrupt on every new data sample
 
-    max30102_device->registers.fifo_config_reg.smp_ave_bits = 0b010;       // 4 samples             
-    max30102_device->registers.fifo_config_reg.fifo_rollover_en_bit = 1;
-    max30102_device->registers.fifo_config_reg.fifo_a_full_bits = 0xF;    // free space for 15 samples
+    max30102_device->registers.intr_enable_2_reg.die_temp_rdy_en_bit      = 1;      // enable temperature sample ready interrupt 
 
-    max30102_device->registers.mode_config_reg.mode_bits = 0b011;        // SpO2 mode (RED LED and IR LED )
+    max30102_device->registers.fifo_config_reg.smp_ave_bits               = MAX31_SAMPLE_AVG_32;  // 16 samples averaging
+    max30102_device->sample_avg = MAX31_SAMPLE_AVG_32;
 
-    max30102_device->registers.spo2_config_reg.spo2_adc_rge_bits = 0b01;                
-    max30102_device->registers.spo2_config_reg.spo2_sr_bits = 0b000;                    
-    max30102_device->registers.spo2_config_reg.led_pw_bits = 0b10;                      
-    max30102_device->registers.led1_pa_reg.led1_pa_bits = 0x24;                         
-    max30102_device->registers.led2_pa_reg.led2_pa_bits = 0x24;                         
-    max30102_device->registers.prox_mode_led_reg.pilot_pa_bits = 0x7F;                  
-    max30102_device->registers.prox_intr_thresh_reg.prox_intr_thresh_bits = 0x0F;           
+    max30102_device->registers.fifo_config_reg.fifo_rollover_en_bit       = 1;
+    max30102_device->registers.fifo_config_reg.fifo_a_full_bits           = 0xF;    // trigger interrupt on free space for 15 samples left
+
+    max30102_device->registers.mode_config_reg.mode_bits                  = 0b011;  // SpO2 mode (RED LED and IR LED )
+    max30102_device->mode = MAX31_MODE_SPO2_RED_IR;
+
+    max30102_device->registers.spo2_config_reg.spo2_adc_rge_bits          = MAX31_ADC_RNG_4096;   // 4096 ADC range
+    max30102_device->adc_range = MAX31_ADC_RNG_4096;
+
+    max30102_device->registers.spo2_config_reg.spo2_sr_bits               = MAX31_SAMPLERATE_800;  // 00 samples per second
+    max30102_device->samplerate = MAX31_SAMPLERATE_800;
+
+    max30102_device->registers.spo2_config_reg.led_pw_bits                = MAX31_LED_PWM_411;   // led pulse width 411 us (18 bit ADC resolution)
+    max30102_device->led_pwm  = MAX31_LED_PWM_411;
+
+    max30102_device->registers.led1_pa_reg.led1_pa_bits                   = 0x3F;                         
+    max30102_device->registers.led2_pa_reg.led2_pa_bits                   = 0x3F;
+
+    //max30102_device->registers.prox_mode_led_reg.pilot_pa_bits            = 0x7F;                  
+    //max30102_device->registers.prox_intr_thresh_reg.prox_intr_thresh_bits = 0xFF;           
     
     max30102_device->dev_status = UNINITIALIZED;
 
@@ -234,13 +350,13 @@ esp_err_t max30102_clear_register(max30102_generic_register_t *reg)
     return error;
 }
 
-esp_err_t max30102_get_register(max30102_generic_register_t *reg)
+esp_err_t max30102_get_register(max30102_generic_register_t *reg, uint8_t data_len)
 {
     esp_err_t error = ESP_OK;
     uint8_t dev_addr = MAX30102_I2C_ADDRESS;
     uint8_t reg_addr = reg->reg_addr;
     uint8_t *reg_value = &(reg->reg_val);
-    error = i2c_device_register_read(dev_addr, reg_addr, reg_value, 1);
+    error = i2c_device_register_read(dev_addr, reg_addr, reg_value, data_len);
     return error; 
 }
 
@@ -271,7 +387,7 @@ esp_err_t max30102_get_intr_status_reg_1(max30102_device_t *dev, int8_t *reg_val
     esp_err_t error = ESP_OK;
 
     max30102_generic_register_t *reg = (max30102_generic_register_t *) &(dev->registers.intr_status_1_reg);
-    error = max30102_get_register(reg);
+    error = max30102_get_register(reg, 1);
 
     if(error == ESP_OK) {
         *reg_val = reg->reg_val;
@@ -312,20 +428,23 @@ esp_err_t max30102_start_data_acquisition(max30102_device_t *dev)
     return error;
 }
 
-esp_err_t max30102_fifo_data_read(max30102_device_t *dev)
+esp_err_t max30102_fifo_data_read(max30102_device_t *dev, uint8_t * numOfSamples )
 {
     esp_err_t error = ESP_OK;
 
     int8_t fifo_wr_ptr = 0;
     int8_t fifo_rd_ptr = 0;
     
+    memset( &dev->red_led_buffer, 0, sizeof(dev->red_led_buffer) );
+    memset( &dev->ir_led_buffer, 0, sizeof(dev->ir_led_buffer) );
+
     max30102_get_fifo_wr_ptr(dev, &fifo_wr_ptr);
     max30102_get_fifo_rd_ptr(dev, &fifo_rd_ptr);
     
     uint8_t num_samples_to_read = (fifo_wr_ptr > fifo_rd_ptr) ? (fifo_wr_ptr - fifo_rd_ptr) : (fifo_rd_ptr - fifo_wr_ptr);
     #ifdef DEBUG
-        printf(" Num samples to read %d", num_samples_to_read);
-    #endif 
+        //printf(" Num samples to read %d", num_samples_to_read);
+    #endif
     
     for (int i = 0; i < num_samples_to_read; i++)
     {
@@ -334,9 +453,15 @@ esp_err_t max30102_fifo_data_read(max30102_device_t *dev)
         {
             return error;
         }
-        #ifdef DEBUG
-            printf("\r\nred led: %ld\r\nir led: %ld\r\n",dev->red_led_buffer[i], dev->ir_led_buffer[i]);
-        #endif 
+    }
+
+    if( NULL != numOfSamples )
+    {
+        *numOfSamples = num_samples_to_read;
+    }
+    else
+    {
+        error = ESP_ERR_INVALID_ARG;
     }
 
     return error;
@@ -348,34 +473,24 @@ esp_err_t max30102_get_die_temp( max30102_device_t * dev )
     float temp_frac = 0.0;
     int temp_int = 0;
 
-    dev->registers.die_temp_config_reg.temp_en_bit = 1; 
-    esp_err_t ret = max30102_set_register( (max30102_generic_register_t *) &(dev->registers.die_temp_config_reg) );
+    esp_err_t ret = max30102_get_register( (max30102_generic_register_t*) &(dev->registers.intr_status_2_reg), 1 );
     if( ret != ESP_OK )
     {
         return ret;
     }
 
-    ret = max30102_get_register( (max30102_generic_register_t*) &(dev->registers.intr_status_2_reg) );
-    if( ret != ESP_OK )
+   
+    ret = i2c_device_register_read( MAX30102_I2C_ADDRESS, dev->registers.die_temp_int_reg.reg_addr, temp, 2 );
+    if( ESP_OK == ret )
     {
-        return ret;
+        temp_int = (int8_t)temp[0];
+        temp_frac = ((float) temp[1]) * 0.0625;
+        dev->die_temp_buff = temp_frac + ((float)temp_int);
     }
-
-    if(dev->registers.intr_status_2_reg.die_temp_rdy_bit) 
-    {
-        ret = i2c_device_register_read( MAX30102_I2C_ADDRESS, dev->registers.die_temp_int_reg.reg_addr, temp, 2 );
-        if( ESP_OK == ret )
-        {
-            temp_int = (int8_t)temp[0];
-            temp_frac = ((float) temp[1]) * 0.0625;
-            dev->die_temp_buff = temp_frac + ((float)temp_int);
-        }
         
     #ifdef DEBUG
-        printf( "Die temp: %f\n", dev->die_temp_buff );
+        //printf( "Die temp: %f\n", dev->die_temp_buff );
     #endif // DEBUG
     
-    }
-
     return ret;
 }
