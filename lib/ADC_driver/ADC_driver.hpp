@@ -16,8 +16,11 @@
 #include "DataLogger.hpp"
 #include "Cascade_filter.hpp"
 
-#define ADC_ATTEN_DEFAULT       ADC_ATTEN_DB_11 // for input signal range 150 mV - 2450 mV
+
+#define ADC_SAMPLE_FREQ_HZ      (20000U) // 20 kHz
+#define ADC_ATTEN_DEFAULT       ADC_ATTEN_DB_6//ADC_ATTEN_DB_11 // for input signal range 150 mV - 2450 mV
 #define ADC_BITWIDTH_DEFAULT    ADC_BITWIDTH_12
+
 
 namespace Driver
 {
@@ -67,7 +70,8 @@ namespace Driver
                 adc_bitwidth( ADC_BITWIDTH_DEFAULT ), 
                 adc_cali_scheme_handle( NULL ), 
                 adc_continuous_mode_drv_handle( NULL ),
-                multisampling_mode( MULTISAMPLING_MODE_64 )
+                multisampling_mode( MULTISAMPLING_MODE_64 ),
+                device_sampling_frequency( (float)ADC_SAMPLE_FREQ_HZ / (float)multisampling_mode )
             {
 
             }
@@ -79,6 +83,7 @@ namespace Driver
             adc_cali_handle_t adc_cali_scheme_handle;
             adc_continuous_handle_t adc_continuous_mode_drv_handle;
             multisampling_mode_t multisampling_mode;
+            float device_sampling_frequency;
 
         } adc_dev_t;
 
