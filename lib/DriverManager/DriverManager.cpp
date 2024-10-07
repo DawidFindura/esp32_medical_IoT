@@ -19,6 +19,11 @@ DriverManager::DriverManager( Interface::IStateManager & stateManager, Interface
         m_registeredDrivers[driverIndex] = nullptr;
     }
 
+    for( int commDriverIndex = 0; commDriverIndex < maxNumOfCommDrivers; commDriverIndex++ )
+    {
+        m_registeredCommDrivers[commDriverIndex] = nullptr;
+    }
+
     pthread_cond_init( &m_startCondVar, NULL );
     pthread_mutex_init( &m_threadMutex, NULL );
 
@@ -127,11 +132,52 @@ execStatus DriverManager::unregisterCommDriver( Interface::IDriver * const drive
 execStatus DriverManager::sendMessage( const pduMessage_t & message )
 {
     execStatus eStatus = execStatus::SUCCESS;
-    ESP_LOGI( TAG, "In driver manager. Sending the message into the queue" );
+    //ESP_LOGI( TAG, "In driver manager. Sending the message into the queue" );
     m_messageQueue.push( message );
 
     return eStatus;
 }
+
+execStatus DriverManager::initCommDrivers()
+{
+    execStatus eStatus = execStatus::SUCCESS;
+    
+    for( int commDriverIdx = 0; commDriverIdx < maxNumOfCommDrivers; commDriverIdx++ )
+    {
+        if( m_registeredCommDrivers[commDriverIdx] != nullptr )
+        {
+            eStatus = m_registeredCommDrivers[commDriverIdx]->init();
+            if( execStatus::SUCCESS != eStatus )
+            {
+                ESP_LOGE( TAG, "Failed to init comm driver: %d", commDriverIdx );
+                return eStatus;
+            }
+        }
+    }
+
+    return eStatus;   
+}
+
+execStatus DriverManager::startCommDrivers()
+{
+    execStatus eStatus = execStatus::SUCCESS;
+    
+    for( int commDriverIdx = 0; commDriverIdx < maxNumOfCommDrivers; commDriverIdx++ )
+    {
+        if( m_registeredCommDrivers[commDriverIdx] != nullptr )
+        {
+            eStatus = m_registeredCommDrivers[commDriverIdx]->start();
+            if( execStatus::SUCCESS != eStatus )
+            {
+                ESP_LOGE( TAG, "Failed to start comm driver: %d", commDriverIdx );
+                return eStatus;
+            }
+        }
+    }
+
+    return eStatus;
+}
+
 
 execStatus DriverManager::runDrivers()
 {
@@ -348,9 +394,7 @@ void DriverManager::work()
     }
     else /* internal devices ( drivers )*/
     {
-        ESP_LOGI( TAG, "Get the internal message: %s", receivedMessage.signals );
-
-        if( m_registeredDrivers[(int)eCommDriverID::MQTT_DRIVER] != nullptr )
+        if( m_registeredCommDrivers[(int)eCommDriverID::MQTT_DRIVER] != nullptr )
         {
             execStatus eStatus = m_registeredCommDrivers[(int)eCommDriverID::MQTT_DRIVER]->forwardMessage( receivedMessage );
             if( execStatus::SUCCESS != eStatus )
