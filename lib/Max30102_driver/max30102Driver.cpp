@@ -164,11 +164,13 @@ execStatus Max30102Driver::init()
         return eStatus;
     }
 
-    if( ESP_OK == esp_err )
-    {
-        eStatus = execStatus::SUCCESS;
-        m_driverState = eDriverState::INITIALIZED;
-    }
+    // if( ESP_OK == esp_err )
+    // {
+    //     eStatus = execStatus::SUCCESS;
+    //     m_driverState = eDriverState::INITIALIZED;
+    // }
+    eStatus = execStatus::SUCCESS;
+    m_driverState = eDriverState::INITIALIZED;
 
     return eStatus;
 }
@@ -293,6 +295,7 @@ execStatus Max30102Driver::stop()
     }
 
     m_driverState = eDriverState::STOPPED;
+    ESP_LOGI( TAG, "Change state to STOPPED");
 
     if( pdTRUE == xSemaphoreTake( m_readerTaskFinishedSmphrHandle, portMAX_DELAY ) )
     {
@@ -496,8 +499,8 @@ void Max30102Driver::dataProcessorTask( void * pvUserData )
     int32_t lastValidHeartRate = 0;
 
     float SpO2 = 0.0f;
-    float lastValidSpo2 = 0.0f;
-
+    int32_t lastValidSpo2 = 0;
+    
     int8_t hrValid;
     int8_t spValid;
     
@@ -531,8 +534,18 @@ void Max30102Driver::dataProcessorTask( void * pvUserData )
 
             if( true == firstTime )
             {   
+                vRingbufferGetInfo( ring_buff_handle, NULL, NULL, NULL, NULL, &numOfItemsWaiting );
+                if( numOfItemsWaiting >= BUFFER_SIZE )
+                {
+                    itemsWaiting = true;
+                }
+                else
+                {
+                    itemsWaiting = false;
+                }
+
                 /* first time initialization of led's buffers*/
-                for( int sampleIndex = 0; sampleIndex < BUFFER_SIZE; sampleIndex++)
+                for( int sampleIndex = 0; (sampleIndex < BUFFER_SIZE) && (eDriverState::STARTED == maxDriver->m_driverState || itemsWaiting); sampleIndex++)
                 {
                     /* wait infinitely long time for item to be available in the ring buffer */
                     received_item_ptr = (ring_buff_item_t * )xRingbufferReceive( ring_buff_handle, &item_size, portMAX_DELAY );
@@ -544,11 +557,22 @@ void Max30102Driver::dataProcessorTask( void * pvUserData )
                 firstTime = false;  
             }
             
-            for( int sampleIndex = 0; sampleIndex < SAMPLES_IN_ONE_SECOND; sampleIndex++ )
+
+            vRingbufferGetInfo( ring_buff_handle, NULL, NULL, NULL, NULL, &numOfItemsWaiting );
+            if( numOfItemsWaiting >= SAMPLES_IN_ONE_SECOND )
+            {
+                itemsWaiting = true;
+            }
+            else
+            {
+                itemsWaiting = false;
+            }
+
+            for( int sampleIndex = 0; (sampleIndex < SAMPLES_IN_ONE_SECOND) && (eDriverState::STARTED == maxDriver->m_driverState || itemsWaiting); sampleIndex++ )
             {
                 /* wait infinitely long time for item to be available in the ring buffer */
                 received_item_ptr = (ring_buff_item_t * )xRingbufferReceive( ring_buff_handle, &item_size, portMAX_DELAY );
-                
+
                 /* we need to swap red_led and ir_led buffers because of chinese copy of our module max30102*/
                 ir_buffer[write_offset] = received_item_ptr->red_led;
                 red_buffer[write_offset] = received_item_ptr->ir_led;
@@ -572,13 +596,13 @@ void Max30102Driver::dataProcessorTask( void * pvUserData )
             
             if( spValid && hrValid )
             {
-                lastValidHeartRate = heartRate;
-                lastValidSpo2 = SpO2;
+                lastValidHeartRate = static_cast<int32_t>(heartRate);
+                lastValidSpo2 = static_cast<int32_t>(SpO2);
             }
-            
-            memcpy( pduToSend.signals, &lastValidHeartRate, sizeof(lastValidHeartRate) );
+    
+            memcpy( &pduToSend.signals[0], &lastValidHeartRate, sizeof(lastValidHeartRate) );
             memcpy( &pduToSend.signals[4], &lastValidSpo2, sizeof(lastValidSpo2) );
-            memcpy( &pduToSend.signals[8], &maxDriver->m_max30102Device.die_temp_buff, sizeof(float) );
+            memcpy( &pduToSend.signals[8], &maxDriver->m_max30102Device.die_temp_buff, sizeof(int32_t) );
 
             execStatus eStatus = maxDriver->m_driverManager.sendMessage( pduToSend );
             if( execStatus::SUCCESS != eStatus )
@@ -587,18 +611,8 @@ void Max30102Driver::dataProcessorTask( void * pvUserData )
             }
 
             #ifdef DEBUG
-                //ESP_LOGI(TAG, "Heart Rate: %ld bpm, SpO2: %.2f, ratio: %.2f, correl: %.2f, read_off: %ld", heartRate, SpO2, ratio, correl, read_offset);
+                ESP_LOGI(TAG, "Heart Rate: %ld bpm, SpO2: %.2f, ratio: %.2f, correl: %.2f, temp: %ld", heartRate, SpO2, ratio, correl, maxDriver->m_max30102Device.die_temp_buff);
             #endif
-
-            vRingbufferGetInfo( ring_buff_handle, NULL, NULL, NULL, NULL, &numOfItemsWaiting );
-            if( numOfItemsWaiting > 0 )
-            {
-                itemsWaiting = true;
-            }
-            else
-            {
-                itemsWaiting = false;
-            }
 
             /* minimum delay for Idle Task to do clean job and reset watchdog timer */
             vTaskDelay( pdMS_TO_TICKS( 1 ));

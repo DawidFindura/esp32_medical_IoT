@@ -18,7 +18,7 @@ typedef enum {
 
 typedef struct 
 {
-
+    
     i2c_port_t max30102_i2c_master_port;
     i2c_config_t max30102_i2c_cfg;
     max30102_registers_t registers;
@@ -32,9 +32,10 @@ typedef struct
 
     uint32_t red_led_buffer[ MAX30102_LEDS_BUFFER_SIZE ];
     uint32_t ir_led_buffer[ MAX30102_LEDS_BUFFER_SIZE ];
-    float die_temp_buff;
+    int32_t die_temp_buff;
 
 } max30102_device_t;
+
 
 
 esp_err_t max30102_default_config_init(max30102_device_t *max30102_device );
