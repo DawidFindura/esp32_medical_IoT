@@ -8,7 +8,7 @@
 #include "MqttDriver.hpp"
 #include "ADC_driver.hpp"
 #include "FIR_filter.hpp"
-#include "IIR_filer.hpp"
+#include "IIR_filter.hpp"
 #include "Cascade_filter.hpp"
 #include "common.hpp"
 #include "DriverManager.hpp"
