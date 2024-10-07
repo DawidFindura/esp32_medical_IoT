@@ -1,5 +1,5 @@
 #include <iostream>
-#include "IIR_filer.hpp"
+#include "IIR_filter.hpp"
 
 /* highpass filter coefficients for fc = 0.5 Hz*/
 //const float iir_filter_a_coeff_high[5]={1.000000,-3.971566,5.915101,-3.915501,0.971966};
