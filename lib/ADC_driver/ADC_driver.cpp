@@ -9,7 +9,6 @@
 
 #define NUMBER_OF_ADC_CHANNELS              1
 #define ADC_GPIO_PIN                        GPIO_NUM_34
-#define ADC_SAMPLE_FREQ_HZ                  20000 // 20 kHz
 
 #define ADC_DATA_READER_TASK_STACK_SIZE     5000 // bytes
 #define ADC_DATA_READER_TASK_PRIORITY       5
@@ -295,21 +294,23 @@ execStatus ADC_driver::stop()
 
     m_adc_driver_state = eDriverState::STOPPED;
 
+    if( pdTRUE == xSemaphoreTake( m_adc_data_proc_finished_semphr, portMAX_DELAY ) )
+    {
+        ESP_LOGI( TAG, "Data processor task finished" ); 
+    } 
+
     if( pdTRUE == xSemaphoreTake( m_adc_data_reader_finished_semphr, portMAX_DELAY ) )
     {
         ESP_LOGI( TAG, "Data reader task finished" );
     }
 
+    ESP_LOGI( TAG, "After reader task finsihed ");
     esp_err = adc_continuous_stop( m_adc_device.adc_continuous_mode_drv_handle );
     if( ESP_OK == esp_err )
     {   
-        if( pdTRUE == xSemaphoreTake( m_adc_data_proc_finished_semphr, portMAX_DELAY ) )
-        {
-            ESP_LOGI( TAG, "Data processor task finished" );
-            eStatus = execStatus::SUCCESS;
-        } 
+        eStatus = execStatus::SUCCESS;
     }
-    
+
     return eStatus;
 }
 
@@ -589,6 +590,11 @@ void ADC_driver::adc_data_reader_task( void * pvUserData )
                     {
                         int voltage = 0;
                         esp_err = adc_cali_raw_to_voltage( adc_driver->m_adc_device.adc_cali_scheme_handle, adc_raw_data, &voltage );
+                        //printf("voltage");
+                        //printf("%d",voltage);
+                        // printf("raw");
+                        // printf("%ld",adc_raw_data);
+                        // printf("\r\n");
                         if( ESP_OK == esp_err )
                         {
                             //ESP_LOGI(TAG, "Channel: %d, Raw Value: %d Voltage: %d", (int)adc_chan_num, (int)adc_raw_data, (int)voltage );
@@ -648,10 +654,9 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
     
         ring_buff_handle = adc_driver->m_adc_data_ring_buff_handle;
         int multisampling_window_size = static_cast<int>( adc_driver->m_adc_device.multisampling_mode );
-        bool itemsWaiting = false;
 
         /* task can go into stopped state only after it empties the ring buffer */
-        while( eDriverState::STARTED == adc_driver->m_adc_driver_state || itemsWaiting )
+        while( eDriverState::STARTED == adc_driver->m_adc_driver_state )
         {  
             int result = 0;
             int multisampling_index = 0;
@@ -665,17 +670,7 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
                 vRingbufferReturnItem( ring_buff_handle, (void *)received_item_ptr );
                 multisampling_index++;
                 
-                vRingbufferGetInfo( ring_buff_handle, NULL, NULL, NULL, NULL, &numOfItemsWaiting );
-                if( numOfItemsWaiting > 0 )
-                {
-                    itemsWaiting = true;
-                }
-                else
-                {
-                    itemsWaiting = false;
-                }
-                
-            } while ( (multisampling_index < multisampling_window_size) && itemsWaiting );
+            } while ( (multisampling_index < multisampling_window_size) && (eDriverState::STARTED == adc_driver->m_adc_driver_state) );
             
             result /= multisampling_index;
             
@@ -693,14 +688,19 @@ void ADC_driver::adc_data_processor_task( void * pvUserData )
             
             if( signalIndex < MAX_NUM_OF_ITEMS_IN_PDU_MESS )
             {
-                pduBuff[signalIndex] = result;
+                pduBuff[signalIndex] = signalIndex;//result;
+                //printf("input");
+                //printf("%d", result);
+                // printf("cascadeFiltered");
+                // printf("%f",(float)iir_out);
+                // printf("\r\n");
                 signalIndex++;
             }
             else
             {   
                 memcpy( pduToSend.signals, pduBuff, sizeof(pduBuff) );
                 execStatus eStatus = adc_driver->m_driverManager.sendMessage( pduToSend );
-                ESP_LOGI( TAG, "Sending the message to driver manager with status code: %d", (int)eStatus );
+                //ESP_LOGI( TAG, "Sending the message to driver manager with status code: %d", (int)eStatus );
                 signalIndex = 0;
             }
             
