@@ -199,7 +199,6 @@ static inline void max30102_reg_addr_init(max30102_generic_register_t *start_reg
 {  
     for(int i = 0; i < MAX30102_NUM_OF_REGISTERS; i++){
         start_reg[i].reg_addr = max30102_register_addresses[i];
-        ESP_LOGI(TAG, "\r\n%x \t %x", start_reg[i].reg_addr, max30102_register_addresses[i]);
     }
 }
 
@@ -485,7 +484,7 @@ esp_err_t max30102_get_die_temp( max30102_device_t * dev )
     {
         temp_int = (int8_t)temp[0];
         temp_frac = ((float) temp[1]) * 0.0625;
-        dev->die_temp_buff = temp_frac + ((float)temp_int);
+        dev->die_temp_buff = (int32_t)(temp_frac + ((float)temp_int));
     }
         
     #ifdef DEBUG

@@ -18,8 +18,6 @@ static const char * pcDefaultMqttUri = "mqtt://192.168.100.5";
 
 static const uint32_t u32DefaultMqttPort = 1883;
 
-static const char * topicNames[] = {"AD8232_DRIVER", "MAX30102_DRIVER", "MQTT_DRIVER", "WIFI_DRIVER", "RTC_DRIVER"};
-
 /**
  * @brief default MQTT user name used during connection to MQTT broker
  * 
@@ -635,7 +633,8 @@ void MqttDriver::dataPublisherTask( void * a_pvArgs )
             uint8_t topicIndex = messageToPublish.header.driverID;
             if( topicIndex < MAX_NUM_OF_TOPIC_NAMES )
             {
-                i32MsgID = esp_mqtt_client_publish( mqtt_driver->m_mqttClientHandle, topicNames[topicIndex], pcDataToSend, m_u8PduItemSize, 0, 0 );
+                i32MsgID = esp_mqtt_client_publish( mqtt_driver->m_mqttClientHandle, MQTT_topic_names[topicIndex], pcDataToSend, m_u8PduItemSize, 0, 0 );
+                //ESP_LOGI( TAG, "Published data: %s on topic: %s\n", pcDataToSend, MQTT_topic_names[topicIndex]);
             }
             
             /* chceck the message id after publishing; equals 0 on successfull publish */
