@@ -6,15 +6,17 @@
 
 #define PDU_MESSAGE_SIZE  (17U) 
 
-#define DRIVER_ID_MASK    (0x0F);
-#define DEVICE_ID_MASK    (0xF0);
-
+#define MAX_NUM_OF_MQTT_TOPIC_NAMES         (5U)
 #define MQTT_AVAILABILITY_PUBLISH_TOPIC     "DEV_AVAILABLE"
 #define MQTT_STATE_CHANGE_TOPIC             "STATE_CHANGE"
 
 #define MAX_NUM_OF_COMMANDS    (6U)
 
 #define INVALID_SIGNAL         (0)       
+
+extern const char * MQTT_topic_names[MAX_NUM_OF_MQTT_TOPIC_NAMES];
+extern const char * command_list[MAX_NUM_OF_COMMANDS];
+
 
 enum class eDataType
 {
@@ -36,9 +38,6 @@ enum class eDeviceState
     FILTER_ON,
     FILTER_OFF
 };
-
-extern const char * command_list[MAX_NUM_OF_COMMANDS];
-
 
 typedef struct header
 {
