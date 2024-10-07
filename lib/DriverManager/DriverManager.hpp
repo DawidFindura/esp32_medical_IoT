@@ -30,10 +30,33 @@ namespace Service
         execStatus registerCommDriver( Interface::IDriver * const driver, const eCommDriverID driverID );
         execStatus unregisterCommDriver( Interface::IDriver * const driver, const eCommDriverID driverID );
 
+        /**
+         * @brief initialize the registered communication drivers 
+         */
+        execStatus initCommDrivers();
+
+        /**
+         * @brief start the registerd comm drivers
+         */
+        execStatus startCommDrivers();
+
         /* methods for thread routine */
+
+        /**
+         * @brief create and start driver manager's thread 
+         */
         execStatus start();
+
+        /**
+         * @brief stop driver manager's thread
+         */
         execStatus stop();
+
+        /**
+         * @brief thread routine 
+         */
         void work();
+
 
         /* method from IObserver interface */
         execStatus update();
