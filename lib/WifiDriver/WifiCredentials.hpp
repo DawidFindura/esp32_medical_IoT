@@ -4,9 +4,11 @@
 /**
  * @brief default Wifi SSID if user does not provide other SSID for Wifi network.
  * 
+ * users should provide their own login credentials to the wifi network
+ *
  * @var const char * defaultWifiSSID
  */
-const char * defaultWifiSSID = "NETIASPOT-G8bG";
+
 //const char * defaultWifiSSID = "Redmi";
 
 /**
@@ -14,7 +16,7 @@ const char * defaultWifiSSID = "NETIASPOT-G8bG";
  * 
  * @var const char * defaultWifiPassword
  */
-const char * defaultWifiPassword = "4D6wVmbcEH8s";
+
 //const char * defaultWifiPassword = "123456789";
 
 #endif // WIFI_CREDENTIALS_HPP
